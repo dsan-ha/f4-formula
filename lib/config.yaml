@@ -1,0 +1,19 @@
+DEBUG: 1
+CACHE: "folder=lib/tmp/cache/base"
+UI: "ui/"
+DI_AUTOWIRING: true
+HIGHLIGHT: true
+db:
+  dsn: mysql:host=mysql-5.7;port=3306;dbname=fff_skeleton
+  login: root
+  pass: root
+cache:
+  folder: lib/tmp/cache/
+  memcached_host: 127.0.0.1
+  memcached_port: 11211
+  redis_host: 127.0.0.1
+  redis_port: 11211
+  redis_db: 0
+log:
+  log_folder: 'lib/tmp/log/'
+  json_log: 'lib/tmp/log/json_sus.log'

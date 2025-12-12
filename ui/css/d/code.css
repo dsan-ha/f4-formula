@@ -1,0 +1,41 @@
+pre.body-md,code{word-wrap:break-word;color:black}.comment,.doc_comment,.ml_comment{color:dimgray;font-style:italic}.variable{color:blueviolet}.const,.constant_encapsed_string,.class_c,.dir,.file,.func_c,.halt_compiler,.line,.method_c,.lnumber,.dnumber{color:crimson}.string,.and_equal,.boolean_and,.boolean_or,.concat_equal,.dec,.div_equal,.inc,.is_equal,.is_greater_or_equal,.is_identical,.is_not_equal,.is_not_identical,.is_smaller_or_equal,.logical_and,.logical_or,.logical_xor,.minus_equal,.mod_equal,.mul_equal,.ns_c,.ns_separator,.or_equal,.plus_equal,.sl,.sl_equal,.sr,.sr_equal,.xor_equal,.start_heredoc,.end_heredoc,.object_operator,.paamayim_nekudotayim{color:black}.abstract,.array,.array_cast,.as,.break,.case,.catch,.class,.clone,.continue,.declare,.default,.do,.echo,.else,.elseif,.empty.enddeclare,.endfor,.endforach,.endif,.endswitch,.endwhile,.eval,.exit,.extends,.final,.for,.foreach,.function,.global,.goto,.if,.implements,.include,.include_once,.instanceof,.interface,.isset,.list,.namespace,.new,.print,.private,.public,.protected,.require,.require_once,.return,.static,.switch,.throw,.try,.unset,.use,.var,.while{color:royalblue}.open_tag,.open_tag_with_echo,.close_tag{color:orange}.ini_section{color:black}.ini_key{color:royalblue}.ini_value{color:crimson}.xml_tag{color:dodgerblue}.xml_attr{color:blueviolet}.xml_data{color:red}.section{color:black}.directive{color:blue}.data{color:dimgray}
+
+.highlight-container {
+    font-family: 'Roboto Mono', monospace;
+    color: #1e1e1e;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    tab-size: 4;
+}
+
+/* HTML */
+.tag { color: #569CD6; }
+.attribute { color: #9CDCFE; }
+.attribute-value { color: #CE9178; }
+.comment { color: #6A9955; font-style: italic; }
+
+/* Markdown */
+.md-h1 { color: #D16969; font-weight: bold; font-size: 160%; }
+.md-h2 { color: #c5942e; font-weight: bold; font-size: 140%; }
+.md-h3 { color: #72ad62; font-weight: bold; font-size: 120%; }
+.md-h4 { color: #a16565; font-weight: bold; font-size: 120%; }
+.md-h1 .md-bold, .md-h2 .md-bold, .md-h3 .md-bold, .md-h4 .md-bold,
+.md-h1 .md-italic, .md-h2 .md-italic, .md-h3 .md-italic, .md-h4 .md-italic{
+	color: inherit;
+}
+.md-bold { color: #C586C0; font-weight: bold; }
+.md-italic { color: #6daacb; font-style: italic; }
+.md-code { color: #CE9178; background: #333; padding: 2px 4px; border-radius: 4px; }
+.md-link { color: #4FC1FF; text-decoration: underline; }
+.md-list { color: #b15f5f; }
+.md-image{
+	max-height: 300px;
+	margin-top: 10px;
+	margin-bottom: 10px;
+	margin-right: 10px;
+}
+.md-galery{
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+}

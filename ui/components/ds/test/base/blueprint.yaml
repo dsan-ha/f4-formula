@@ -1,0 +1,11 @@
+title:
+  label: "Заголовок страницы"
+  def: "Без названия"
+
+show_sidebar:
+  label: "Показывать боковую панель"
+  def: true
+
+items_per_page:
+  label: "Элементов на странице"
+  def: 10

@@ -1,0 +1,7 @@
+.pure-menu-link{
+	display: inline-flex;
+	align-items: center;
+}
+.pure-menu-link i{
+	margin-right: 10px;
+}
