@@ -9,6 +9,9 @@ class Response
     protected array $headerIndex = [];
     protected string $body = '';
     protected bool $sent = false;
+    protected array $data = [];
+    protected array $errors = [];
+    protected string $flag = 'ok'; // ok|error
 
     // ==== Управление статусом ====
     public function getStatus(): int { return $this->status; }
@@ -55,6 +58,18 @@ class Response
         $clone->body = $body;
         return $clone;
     }
+
+    public function withData(array $data): self
+    {
+        $this->data = $data;
+        return $this;
+    }
+
+    public function getData(): array
+    {
+        return $this->data;
+    }
+
     public function write(string $chunk): self {
         $clone = clone $this;
         $clone->body .= $chunk;
@@ -75,5 +90,65 @@ class Response
         }
         echo $this->body;
         $this->sent = true;
+    }
+
+    public function addError(array $error): self
+    {
+        $this->flag = 'error';
+
+        $cnt = count($error);
+
+        // 1 элемент: просто сообщение
+        if ($cnt === 1) {
+            $message = (string)array_values($error)[0];
+            $this->errors[] = $message;
+            return $this;
+        }
+
+        // 2 элемента: field => message
+        if ($cnt === 2) {
+            $vals = array_values($error);
+            $field = (string)$vals[0];
+            $message = (string)$vals[1];
+
+            if ($field === '') {
+                // если поле пустое, считаем безликой
+                $this->errors[] = $message;
+            } else {
+                // хранение как map field=>[messages...]
+                if (!isset($this->errors[$field])) $this->errors[$field] = [];
+                $this->errors[$field][] = $message;
+            }
+
+            return $this;
+        }
+
+        throw new \InvalidArgumentException('addError expects [message] or [field, message]');
+    }
+
+    public function makeBody(): array
+    {
+        return [
+            'flag'   => $this->flag,
+            'data'   => $this->data,
+            'errors' => $this->errors,
+        ];
+    }
+    
+    public function ok(array $data = []): self
+    {
+        $this->flag = 'ok';
+        $this->errors = [];
+        $this->data = $data;
+        return $this;
+    }
+
+    public function error(string $message = '', ?string $field = null): self
+    {
+        $this->flag = 'error';
+        if ($message !== '') {
+            $field ? $this->addError([$field, $message]) : $this->addError([$message]);
+        }
+        return $this;
     }
 }

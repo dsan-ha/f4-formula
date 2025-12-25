@@ -21,6 +21,7 @@ final class Environment
     private array   $server = [];
     private array   $headers = [];      // lowercased
     private ?string $rawBody = null;
+    protected mixed $body;
     private bool    $cli = false;
 
     // derived
@@ -159,7 +160,7 @@ final class Environment
             $query,
             $this->headers,
             $this->server,
-            $this->rawBody,
+            $this->body,
             $clientIp,
             $this->cli
         );
@@ -176,7 +177,7 @@ final class Environment
             $_SERVER['SERVER_NAME'] = gethostname() ?: 'localhost';
         }
 
-        // CLI эмуляция минимального запроса
+        // CLI эмуляция минимального запроса (оставляем как было)
         if ($this->cli) {
             $_SERVER['REQUEST_METHOD'] = 'GET';
             if (!isset($_SERVER['argv'][1])) {
@@ -211,20 +212,6 @@ final class Environment
         $headers = $this->collectHeaders($_SERVER);
         $headers = $this->sanitizeHeaders($headers);
 
-        // Дозаполнить недостающие HTTP_* в $_SERVER
-        foreach ($headers as $name => $value) {
-            $key = $this->httpKey($name); // X-Foo-Bar -> HTTP_X_FOO_BAR
-            if (!isset($_SERVER[$key])) {
-                $_SERVER[$key] = $value;
-            }
-        }
-        if (isset($headers['content-length']) && !isset($_SERVER['CONTENT_LENGTH'])) {
-            $_SERVER['CONTENT_LENGTH'] = $headers['content-length'];
-        }
-        if (isset($headers['content-type']) && !isset($_SERVER['CONTENT_TYPE'])) {
-            $_SERVER['CONTENT_TYPE'] = $headers['content-type'];
-        }
-
         // Override метода
         if (!empty($headers['x-http-method-override'])) {
             $_SERVER['REQUEST_METHOD'] = strtoupper($headers['x-http-method-override']);
@@ -232,7 +219,7 @@ final class Environment
             $_SERVER['REQUEST_METHOD'] = strtoupper((string)$_POST['_method']);
         }
 
-        // Scheme (сторожево — только по HTTPS флагу; XFP учтём позже в Request)
+        // Scheme
         $this->scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
 
         // Apache VirtualDocumentRoot fix
@@ -261,10 +248,19 @@ final class Environment
         // Единственное чтение тела
         $this->rawBody = $readBody ? file_get_contents('php://input') : null;
 
+        // НОВОЕ: нормализованное body (строка или массив)
+        $contentType = $headers['content-type'] ?? ($_SERVER['CONTENT_TYPE'] ?? null);
+        if ($readBody && $this->rawBody !== null && stripos((string)$contentType, 'application/json') !== false) {
+            $this->body = self::decodeJsonSecure($this->rawBody);
+        } else {
+            $this->body = $this->rawBody;
+        }
+
         // Зафиксировать снимки
         $this->server  = $_SERVER;
         $this->headers = $headers;
     }
+
 
     private function collectHeaders(array $server): array
     {
@@ -374,4 +370,101 @@ final class Environment
         }
         return $remote;
     }
+
+    private static function decodeJsonSecure(string $json, int $depth = 512, int $options = 0): array
+    {
+        try {
+            if ($json === '') {
+                throw new \RuntimeException('Empty JSON string');
+            }
+            if ($depth < 1) {
+                throw new \RuntimeException('Depth must be greater than zero');
+            }
+
+            if (self::containsMaliciousContent($json)) {
+                throw new \RuntimeException('Potentially dangerous JSON content detected');
+            }
+
+            $data = json_decode(
+                $json,
+                true,
+                $depth,
+                $options | JSON_THROW_ON_ERROR | JSON_OBJECT_AS_ARRAY
+            );
+
+            if (self::containsMaliciousStructures($data)) {
+                throw new \RuntimeException('Potentially dangerous data structures detected');
+            }
+
+            if (!is_array($data)) {
+                // JSON body у нас всегда массив
+                throw new \RuntimeException('JSON payload must decode to array');
+            }
+
+            return $data;
+
+        } catch (\Throwable $e) {
+            // логирование по флагу из конфига
+            self::logSuspiciousJson($json, $e->getMessage());
+            // дальше пробрасываем как 400 на уровне error handler (или Router)
+            throw $e;
+        }
+    }
+
+    private static function containsMaliciousContent(string $json): bool
+    {
+        if (preg_match('/"\s*:\s*["\']\s*\+?\s*[a-z0-9_]+\s*\(\s*["\']/i', $json)) return true;
+        if (preg_match('/"[^"]{10000,}"/', $json)) return true;
+        return false;
+    }
+
+    private static function containsMaliciousStructures(mixed $data): bool
+    {
+        // перенос 1-в-1 из JsonHandler【turn4file2†L50-L76】
+        if (is_array($data) || is_object($data)) {
+            foreach ($data as $key => $value) {
+                if (is_string($key) && preg_match('/^(on|javascript|vbscript|data):/i', $key)) {
+                    return true;
+                }
+                if (self::containsMaliciousStructures($value)) {
+                    return true;
+                }
+            }
+        }
+
+        if (is_string($data) && (
+            preg_match('/<(script|iframe|frame|object|embed)/i', $data) ||
+            preg_match('/(on\w+=|javascript:|data:text\/html|<script\b[^>]*>)/i', $data)
+        )) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static function logSuspiciousJson(string $raw, string $reason): void
+    {
+        try {
+            $f4 = \App\F4::instance();
+            $enabled = (bool)$f4->get('log.json_on');
+            if (!$enabled) return;
+
+            $file = (string)$f4->get('log.json_log');
+            if ($file === '') return;
+
+            $line = json_encode([
+                'time'   => date('c'),
+                'ip'     => $_SERVER['REMOTE_ADDR'] ?? null,
+                'reason' => $reason,
+                'raw'    => $raw,
+            ], JSON_UNESCAPED_UNICODE);
+
+            // простой append
+            @file_put_contents($file, $line . PHP_EOL, FILE_APPEND);
+
+        } catch (\Throwable $e) {
+            // логирование не должно валить запрос
+        }
+    }
+
 }

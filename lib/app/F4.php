@@ -146,13 +146,9 @@ class F4
     *   json answer
     *   @return Response
     **/
-    public function json(Response $res, $answer, int $statusCode = 200, array $headers = [], int $jsonOptions = JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR): Response
+    public function json(Response $res): Response
     {
-        if(!empty($headers)){
-            foreach ($headers as $name => $h) {
-                $res = $res->withHeader($name, $h);
-            }
-        }
-        return $res->withStatus($statusCode)->withHeader('Content-Type','application/json; charset=utf-8')->withBody(json_encode($answer, $jsonOptions));
+        $bodyArray = $res->makeBody();
+        return $res->withHeader('Content-Type','application/json; charset=utf-8')->withBody(json_encode($bodyArray, JSON_UNESCAPED_UNICODE ));
     }
 }

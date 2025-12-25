@@ -43,67 +43,6 @@ class JsonHandler
     }
 
     /**
-     * Декодирует JSON из php://input с защитой и логированием (для Telegram)
-     * @param bool $assoc
-     * @param int $depth
-     * @param int $options
-     * @return mixed
-     * @throws JsonException
-     */
-    public static function decodeFromInput(bool $assoc = true, int $depth = 512, int $options = 0)
-    {
-        $raw = file_get_contents('php://input');
-
-        try {
-            return self::decode($raw, $assoc, $depth, $options);
-        } catch (JsonException $e) {
-            $f4 = F4::instance();
-            $log = $f4->get('log.json_on');
-            if($log)
-                self::logSuspiciousPayload($raw, $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /**
-     * Декодирует JSON-строку с обработкой ошибок и проверками безопасности
-     * -
-     * @param string $json JSON-строка
-     * @param bool $assoc Возвращать ассоциативный массив (true) или объект (false)
-     * @param int $depth Максимальная глубина вложенности
-     * @param int $options Опции декодирования
-     * @return mixed Декодированные данные
-     * @throws JsonException Если декодирование не удалось или обнаружены проблемы безопасности
-     */
-    public static function decode(string $json, bool $assoc = true, int $depth = 512, int $options = 0)
-    {
-        // Проверка на пустую строку
-        if (empty($json)) {
-            throw new JsonException('Empty JSON string');
-        }
-
-        // Проверка глубины вложенности
-        if ($depth < 1) {
-            throw new JsonException('Depth must be greater than zero');
-        }
-
-        // Проверка на потенциально опасные конструкции перед декодированием
-        if (self::containsMaliciousContent($json)) {
-            throw new JsonException('Potentially dangerous JSON content detected');
-        }
-
-        // Декодирование с обработкой ошибок
-        $data = json_decode($json, $assoc, $depth, $options | JSON_THROW_ON_ERROR | JSON_OBJECT_AS_ARRAY);
-
-        // Дополнительная проверка после декодирования
-        if (self::containsMaliciousStructures($data)) {
-            throw new JsonException('Potentially dangerous data structures detected');
-        }
-
-        return $data;
-    }
-
-    /**
      * Проверяет данные на наличие циклических ссылок
      * -
      * @param mixed $data Проверяемые данные
@@ -191,42 +130,5 @@ class JsonHandler
         }
 
         return false;
-    }
-
-    /**
-     * Проверяет, является ли строка валидным JSON
-     * -
-     * @param string $json Проверяемая строка
-     * @return bool Валиден ли JSON
-     */
-    public static function isValid(string $json): bool
-    {
-        try {
-            self::decode($json);
-            return true;
-        } catch (JsonException $e) {
-            return false;
-        }
-    }
-
-    /**
-     * Логирует подозрительный JSON-запрос
-     * @param string $raw
-     * @param string $reason
-     * @return void
-     */
-    private static function logSuspiciousPayload(string $raw, string $reason): void
-    {
-        $f4 = F4::instance();
-        $logFile = $f4->get('log.json_log');
-        if (!$logFile) return;
-        $logFile = SITE_ROOT . $logFile;
-        $txt = sprintf(
-            "Suspicious JSON from IP %s: %s\nReason: %s\n\n",
-            $_SERVER['REMOTE_ADDR'] ?? 'unknown',
-            substr($raw, 0, 1000),
-            $reason
-        );
-        Log::writeIn($txt, LogLevel::ERROR);
     }
 }

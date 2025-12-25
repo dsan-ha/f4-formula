@@ -14,7 +14,7 @@ class Request
     protected array $cookies;
     protected array $files;
     protected array $headers;
-    protected ?string $body;
+    protected mixed $body;
     protected string $method;
     protected string $uri;
     protected string $path;
@@ -34,7 +34,7 @@ class Request
         string $query_str,
         array  $headers,  // lowercased
         array  $server,   // snapshot
-        ?string $rawBody,
+        mixed $body,
         string $clientIp,
         bool    $cli = false
     )
@@ -51,7 +51,7 @@ class Request
                $this->headers['X-Requested-With'] == 'XMLHttpRequest') ||
               (isset($server['HTTP_X_REQUESTED_WITH']) && 
                $server['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest');
-        $this->body    = $rawBody;
+        $this->body    = $body;
         $this->method = $method;
         $this->port = $port;
         $this->scheme = $scheme;
@@ -61,15 +61,6 @@ class Request
         $auth = $this->host . (($this->scheme === 'https' && $this->port===443) || ($this->scheme !== 'https' && $this->port===80) ? '' : ':'.$this->port);
         $this->uri    = $this->server['REQUEST_URI'] ?? $this->scheme.'://'.$auth.$this->path.($this->query_str ? '?'.$this->query_str : '');
         $this->clientIp = $clientIp;
-        $contentType = $this->getHeader('content-type', '');
-        if (stripos($contentType ?? '', 'application/json') !== false) {
-            $json = json_decode($rawBody ?? '', true);
-            if (is_array($json)) {
-                $this->post = $json;
-                // чтобы get() тоже видел эти поля
-                $this->request_params = array_replace($this->request_params, $json);
-            }
-        }
     }
 
     // ==== Геттеры данных ====
@@ -84,6 +75,9 @@ class Request
     }
     public function files(string $key='') { 
         return $key?($this->files[$key]??null):$this->files; 
+    }
+    public function body() {
+        return $this->body;
     }
     public function isCli(): bool { return $this->cli; }
     public function isAjax(): bool { return $this->ajax; }
