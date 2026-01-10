@@ -2,6 +2,7 @@
 use App\Service;
 use App\Utils\Cache\FileCacheAdapter;
 use App\Base\ServiceLocator;
+use \App\Modules\ModuleRegistry;
 use Symfony\Component\Yaml\Yaml;
 use DI\ContainerBuilder;
 
@@ -46,3 +47,4 @@ $sl = $sl->useAutowiring($f4->get('DI_AUTOWIRING'))
 $f4->set('CONTAINER',$sl);
 
 $f4->init();
+$f4->getDI(ModuleRegistry::class)->boot();

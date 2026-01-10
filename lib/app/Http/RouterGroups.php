@@ -38,7 +38,7 @@ class RouterGroups {
         $this->flagMiddleware = false;
     }
 
-    public function add(callable $mw): self { 
+    public function add($mw): self { 
         if(!$this->flagMiddleware) user_error('RouterGroups: There is a ban on adding middleware after adding a route',E_USER_ERROR);
         $this->mw->add($mw); return $this; 
     }

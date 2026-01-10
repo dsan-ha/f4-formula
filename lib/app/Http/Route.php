@@ -12,7 +12,7 @@ class Route{
     }
 
 
-    public function addMiddleware(callable $mw): self { $this->middleware->add($mw); return $this; }
+    public function addMiddleware($mw): self { $this->middleware->add($mw); return $this; }
 
 
     public function getParams(): array { return $this->params; }

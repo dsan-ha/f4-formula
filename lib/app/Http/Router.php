@@ -5,6 +5,8 @@ namespace App\Http;
 use App\F4;
 use App\Http\Response;
 use App\Http\Request;
+use App\Http\MiddlewareState;
+use App\Http\MiddlewareCombinator;
 
 class Router {
     protected array $groups = [];
@@ -212,7 +214,7 @@ class Router {
         }
     }
 
-    public function addMiddleware(callable $mw) {
+    public function addMiddleware($mw) {
         $this->globalMiddleware->add($mw);
         return $this;
     }
@@ -350,9 +352,7 @@ class Router {
         $query  = $req->getQueryStr() ?? '';
         $uri    = $req->getUri();
         $cli    = $req->isCli();
-        $origin = $req->getHeader('Origin');
-        $acrm   = $req->getHeader('Access-Control-Request-Method');
-        $cors   = $f4->get('CORS');
+        $f4->set('ROUTE_TTL', 0);
         if (!$this->routes)
             // No routes defined
             user_error(self::E_Routes,E_USER_ERROR);
@@ -369,13 +369,6 @@ class Router {
         $this->routes=array_combine($keys,$vals);
         // Convert to BASE-relative URL
         $req_url=urldecode($path);
-        $preflight=FALSE;
-        if ($cors = ($origin && $cors['origin'])) {
-            $res = $res
-                ->withHeader('Access-Control-Allow-Origin', $cors['origin'])
-                ->withHeader('Access-Control-Allow-Credentials', $f4->export($cors['credentials']));
-            $preflight = (bool)$acrm;
-        }
         $allowed=[];
         foreach ($this->routes as $pattern=>$routes) {
             $args=$this->mask($pattern,$req_url);
@@ -385,12 +378,11 @@ class Router {
             $route=NULL;
             $ptr=$cli?self::REQ_CLI:$req->isAjax()+1;
             if (isset($routes[$ptr][$verb]) ||
-                ($preflight && isset($routes[$ptr])) ||
                 isset($routes[$ptr=0]))
                 $route=$routes[$ptr];
             if (!$route)
                 continue;
-            if (isset($route[$verb]) && !$preflight) {
+            if (isset($route[$verb])) {
                 if ($f4->get('REROUTE_TRAILING_SLASH')===TRUE &&
                     $verb=='GET' &&
                     preg_match('/.+\/$/',$path))
@@ -399,25 +391,29 @@ class Router {
                 $fullMiddleware = clone $this->globalMiddleware;
                 $cur_route = $route[$verb];
                 foreach ($cur_route->middleware->all() as $mw) {
-                    $fullMiddleware->add($mw);
+                    if (is_array($mw) && isset($mw[0], $mw[1]) && ($mw[1] instanceof MiddlewareState)) {
+                        $fullMiddleware->add($mw[0], $mw[1]);
+                    } else {
+                        $fullMiddleware->add($mw);
+                    }
                 }
+                $typeMask = $cli ? self::REQ_CLI : ($req->isAjax() ? self::REQ_AJAX : self::REQ_SYNC);
+                $comb  = new MiddlewareCombinator($typeMask);
+                $partsMdlw = $comb->split($fullMiddleware);
                 $p = $cur_route->getParams();
                 list($handler,$ttl,$kbps,$alias)=[$p['handler'],$p['ttl'],$p['kbps'],$p['alias']];
+                $f4->set('ROUTE_TTL', (int)$ttl);
                 // Capture values of route pattern tokens
                 $f4->set('PARAMS',$args);
                 // Save matching route
                 $f4->set('ALIAS',$alias);
                 $f4->set('PATTERN',$pattern);
-                if ($cors && $cors['expose']) {
-                    $res = $res->withHeader(
-                        'Access-Control-Expose-Headers',
-                        is_array($cors['expose']) ? implode(',', $cors['expose']) : $cors['expose']
-                    );
-                }
                 // Process request
                 $result=NULL;
                 $body='';
                 $now=microtime(TRUE);
+                // BEFORE middleware hooks
+                $res = $comb->runHooks($partsMdlw['before'], $req, $res, $args);
                 if (preg_match('/GET|HEAD/',$verb) && $ttl) {
                     // Only GET and HEAD requests are cacheable
                     $cached=$f4->cache_exists(
@@ -434,27 +430,23 @@ class Router {
                         }
                         // Retrieve from cache backend
                         list($headers,$body,$result)=$data;
-                        user_error('Кэш страниц нужно переделывать проблема с пробросом заголовков и вообще он не доделан', E_USER_ERROR);
                         if (!$cli)
                             array_walk($headers,'header');
-                        $res = $f4->expire($req, $res, $cached[0]+$ttl-$now);
                     }
-                    else
-                        // Expire HTTP client-cached page
-                        $res = $f4->expire($req, $res, $ttl);
                 }
-                else
-                    $res = $f4->expire($req, $res, 0);
+                    
                 if (!strlen($body)) {
                     ob_start();
                     $final = function () use ($args, $handler, $f4, $req, &$res) {
-                        // Новый контракт контроллеров: ($req, $res, $params) 
                         return $this->invokeHandler($handler, $req, $res, $args);
                     };
-                    $result = $fullMiddleware->dispatch($req, $res, $args, $final);
+                    $result = $partsMdlw['main']->dispatch($req, $res, $args, $final);
                     $body = ob_get_clean(); // должен быть пустым
                     if ($result instanceof Response) {
-                        $body .= $result->getBody();
+                        $res = $result;
+                        // AFTER middleware hooks
+                        $res = $comb->runHooks($partsMdlw['after'], $req, $res, $args);
+                        $body .= $res->getBody();
                     } else {
                         user_error(self::E_Response, E_USER_ERROR);
                     }
@@ -464,7 +456,7 @@ class Router {
                         $f4->cache_set($hash,[
                             // Remove cookies
                             preg_grep('/Set-Cookie\:/',headers_list(),
-                                PREG_GREP_INVERT),$body,$result],$ttl);
+                                PREG_GREP_INVERT),$body,$res],$ttl);
                     }
                 }
                 $f4->set('RESPONSE', $body);
@@ -504,8 +496,8 @@ class Router {
                 $this->res = $res;
                 $this->res->send($cli);      
         
-                if ($result || $verb!='OPTIONS')
-                    return $result;
+                if ($res || $verb!='OPTIONS')
+                    return $res;
             }
             $allowed=array_merge($allowed,array_keys($route));
         }
@@ -516,16 +508,6 @@ class Router {
             if (!preg_grep('/Allow:/',$headers_send=headers_list()))
                 // Unhandled HTTP method
                 $res = $res->withHeader('Allow', implode(',', array_unique($allowed)));
-            if ($cors) {
-                $res = $res->withHeader('Access-Control-Allow-Methods', 'OPTIONS,'.implode(',', $allowed));
-                if ($cors['headers']) {
-                    $res = $res->withHeader('Access-Control-Allow-Headers',
-                        is_array($cors['headers']) ? implode(',', $cors['headers']) : $cors['headers']);
-                }
-                if ($cors['ttl']) {
-                    $res = $res->withHeader('Access-Control-Max-Age', (string)$cors['ttl']);
-                }
-            }
             if ($verb!='OPTIONS')
                 $f4->error(405);
         }

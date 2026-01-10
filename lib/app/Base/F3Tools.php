@@ -700,56 +700,6 @@ trait F3Tools {
     }
 
     /**
-    *   Send cache metadata to HTTP client
-    *   @param $secs int
-    **/
-    function expire(Request $req, Response $res, int $secs = 0): Response
-    {
-        if ($req->isCli()) {
-            return $res; // в CLI заголовки не имеют смысла
-        }
-
-        $now = time();
-
-        // Базовые защитные заголовки (оставляем, если уже проставлены где-то выше)
-        if (!$res->hasHeader('X-Frame-Options')) {
-            $res = $res->withHeader('X-Frame-Options', 'SAMEORIGIN');
-        }
-        if (!$res->hasHeader('X-Content-Type-Options')) {
-            $res = $res->withHeader('X-Content-Type-Options', 'nosniff');
-        }
-        if (!$res->hasHeader('X-XSS-Protection')) {
-            // Да, заголовок устарел, но для обратной совместимости можно оставить
-            $res = $res->withHeader('X-XSS-Protection', '1; mode=block');
-        }
-
-        $method = $req->getMethod();
-        $cacheable = ($secs > 0) && ($method === 'GET' || $method === 'HEAD');
-
-        if ($cacheable) {
-            // Убираем Pragma если есть поддержка withoutHeader()
-            if (method_exists($res, 'withoutHeader')) {
-                $res = $res->withoutHeader('Pragma');
-            }
-
-            $res = $res
-                ->withHeader('Cache-Control', 'max-age=' . $secs)
-                ->withHeader('Expires', gmdate('D, d M Y H:i:s', $now + $secs) . ' GMT');
-
-            if (!$res->hasHeader('Last-Modified')) {
-                $res = $res->withHeader('Last-Modified', gmdate('D, d M Y H:i:s', $now) . ' GMT');
-            }
-        } else {
-            $res = $res
-                ->withHeader('Pragma', 'no-cache')
-                ->withHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-                ->withHeader('Expires', 'Fri, 01 Jan 1990 00:00:00 GMT');
-        }
-
-        return $res;
-    }
-
-    /**
     *   Return filtered stack trace as a formatted string (or array)
     *   @return string|array
     *   @param $trace array|NULL

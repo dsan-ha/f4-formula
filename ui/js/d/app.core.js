@@ -7,7 +7,7 @@
     // 1) BUS
     const $bus = $({});
     const bus = {
-        on: function(evt, fn) { $bus.on(evt, fn); return () => $bus.off(evt, fn); },
+        on: function(evt, fn) { $bus.on(evt, fn); return () => $bus.off(evt,fn ); },
         once: function(evt, fn) { $bus.one(evt, fn); },
         off: function(evt, fn) { $bus.off(evt, fn); },
         emit: function(evt, data) { $bus.trigger(evt, data); }
@@ -26,7 +26,7 @@
                 cache: false
             }, opt));
         },
-        post: function(url, data, opt = {}) {
+        post: function(url, data, opt = {json:true}) {
           const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
           const sendJSON = opt.json === true; // явный флаг
 

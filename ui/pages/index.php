@@ -13,4 +13,7 @@ echo app_component(
     'ds:test',
     'base',
     ['CACHE_TYPE' => 'Y','CACHE_TIME' => 360]
-);?>
+);
+
+echo '<br>'.$f4->get('module.test.mess');
+?>

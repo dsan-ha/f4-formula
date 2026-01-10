@@ -151,4 +151,21 @@ class Response
         }
         return $this;
     }
+
+    public function fromResult(\App\Http\Result $r): self
+    {
+        if ($r->flag === 'ok') {
+            return $this->ok($r->data)->withStatus($r->status);
+        }
+        $this->data = $r->data;
+        if(!empty($r->errors[0]['message'])){
+            foreach ($r->errors as $e) {
+                $arr = !empty($e['field'])?[$e['field'],$e['message']]:[$e['message']];
+                $this->addError($arr);
+            }
+        } else {
+            $this->error('Ошибка');
+        }
+        return $this->withStatus($r->status);
+    }
 }

@@ -34,5 +34,12 @@ abstract class ControllerBase
 
     protected function afterRoute($req, Response $res, array $params): void 
     {}
+
+    protected function p404(Response $res, string $mess='Страница не найдена', string $page = 'include/block404.php'):Response 
+    {
+        return $this->render($res->withStatus(404), $page, [
+            'title' => $mess
+        ]);
+    }
     
 }

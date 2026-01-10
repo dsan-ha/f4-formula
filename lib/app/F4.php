@@ -7,6 +7,8 @@ use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\Yaml\Exception\ParseException;
 use App\Base\F3Tools;
 use App\Http\Response;
+use App\Http\MiddlewareState;
+use App\Http\MiddlewareInterface;
 
 
 class F4
@@ -95,12 +97,21 @@ class F4
      * @param callable $handler
      * @return void
      */
-    public function add(callable $handler)
+    public function add($handler, ?MiddlewareState $state = null)
     {
-        $router = $this->get('Router') ?? throw new \RuntimeException(self::E_Router);
-        $router->addMiddleware($handler);
-    }
+        $router = $this->get('Router');
+        if (!$router) {
+            throw new \RuntimeException(self::E_Router);
+        }
 
+        if ($state) {
+            $router->addMiddleware($handler, $state);
+        } else {
+            $router->addMiddleware($handler);
+        }
+
+        return $this;
+    }
     /**
     *   Добавить событие в планировщик
     *   @return void
