@@ -1,99 +1,199 @@
 <?php
+declare(strict_types=1);
+
 namespace App\Modules;
 
 use App\F4;
-use App\Utils\Cache;
-use App\Utils\FileWalker;
-use App\Modules\ModuleAutoloader;
+use App\Base\ServiceLocator;
+use App\Modules\Install\ModuleInstaller;
+use App\Utils\Fs;
 use Symfony\Component\Yaml\Yaml;
+use App\Utils\FileCacheNonContainer;
 
 final class ModuleRegistry
 {
     private F4 $f4;
-    private Cache $cache;
+    private ModuleAutoloader $autoloader;
+    private FileCacheNonContainer $cache;
 
-    /** @var array<string,array> */
-    private array $modules = []; // slug => descriptor
+    /** @var array<string,array<string,mixed>> */
+    private array $modules = [];
 
-    public function __construct(F4 $f4, Cache $cache)
+    public function __construct(F4 $f4, ?ModuleAutoloader $autoloader = null, ?string $cachePath = null)
     {
         $this->f4 = $f4;
-        $this->cache = $cache;
+        $this->autoloader = $autoloader ?? new ModuleAutoloader();
+
+        $cacheDir = $cachePath ?: SITE_ROOT . 'lib/tmp/cache/modules';
+        $this->cache = new FileCacheNonContainer($cacheDir);
     }
 
-    public function boot(): void
+    public function bootstrap(): void
     {
-        $this->discover_modules();
-        $this->discover_autoload();
-        $this->load_modules();
-        // чтобы из любого места можно было посмотреть что поднялось
+        $this->discoverModules();
+        $this->registerAutoload();
+        $this->installMissing();
+
         $this->f4->set('MODULES', $this->modules);
     }
 
-    public function all(): array { return $this->modules; }
-
-    private function discover_autoload(): void
+    public function all(): array
     {
-        /** @var ModuleAutoloader $loader */
-        $loader = $this->f4->getDI(ModuleAutoloader::class);
+        return $this->modules;
+    }
 
-        // регистрируем ОДИН раз
+    public function getAutoloader(): ModuleAutoloader
+    {
+        return $this->autoloader;
+    }
+
+    public function addDefinitionsTo(ServiceLocator $sl): void
+    {
+        foreach ($this->getDataFiles('.definitions.php') as $path) {
+            $payload = require $path;
+
+            if (is_array($payload)) {
+                $sl->addDefinitions($payload);
+                continue;
+            }
+
+            if (is_callable($payload)) {
+                $result = $payload($sl);
+                if (is_array($result)) {
+                    $sl->addDefinitions($result);
+                }
+            }
+        }
+    }
+
+    public function loadBootstrapFiles(array $files): void
+    {
+        foreach ($files as $fileName) {
+            foreach ($this->getDataFiles($fileName) as $path) {
+                $this->applyBootstrapFile($fileName, $path);
+            }
+        }
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function getDataFiles(string $fileName): array
+    {
+        $items = [];
+        $modules = $this->modules;
+
+        uasort($modules, fn(array $a, array $b) => ($b['priority'] ?? 50) <=> ($a['priority'] ?? 50));
+
+        foreach ($modules as $m) {
+            if (empty($m['active'])) {
+                continue;
+            }
+
+            $path = rtrim((string)$m['base_path'], '/\\') . '/data/' . $fileName;
+            if (is_file($path)) {
+                $items[] = $path;
+            }
+        }
+
+        return $items;
+    }
+
+    private function applyBootstrapFile(string $fileName, string $path): void
+    {
+        $payload = require $path;
+
+        /*switch ($fileName) {
+            case 'routes.php':
+                if (is_callable($payload)) {
+                    $payload($this->f4);
+                }
+                break;
+
+            case 'schedule.php':
+                if (is_array($payload)) {
+                    $current = $this->f4->get('SCHEDULE', []);
+                    $this->f4->set('SCHEDULE', array_merge($current, $payload));
+                }
+                break;
+
+            case 'constants.php':
+                if (is_array($payload)) {
+                    foreach ($payload as $name => $value) {
+                        if (is_string($name) && $name !== '' && !defined($name)) {
+                            define($name, $value);
+                        }
+                    }
+                }
+                break;
+        }*/
+    }
+
+    private function registerAutoload(): void
+    {
         static $registered = false;
+
         if (!$registered) {
-            $loader->register(1);
+            $this->autoloader->register(1);
             $registered = true;
         }
 
         foreach ($this->modules as $slug => $m) {
             $ns = (string)($m['namespace'] ?? '');
             if ($ns === '') {
-                // theoretically не должно случаться, потому что namespace обязателен
-                throw new \RuntimeException("Module '{$slug}' missing namespace in registry.");
+                throw new \RuntimeException("Module '{$slug}' missing namespace.");
             }
 
-            $libDir = rtrim($m['base_path'], '/\\') . '/lib';
-            if (!is_dir($libDir)) continue; // lib папка не обязательна
-
-            $loader->addPsr4($ns.'\\', $libDir);
+            $libDir = rtrim((string)$m['base_path'], '/\\') . '/lib';
+            if (is_dir($libDir)) {
+                $this->autoloader->addPsr4($ns . '\\', $libDir);
+            }
         }
     }
 
-    private function discover_modules(): void
+    private function installMissing(): void
     {
+        $installer = new ModuleInstaller($this->f4);
+        $installer->installMissing($this->modules);
+    }
 
-        // кэшируем результат скана по сигнатуре (mtime файлов setting.yaml)
-        [$signature, $settingsFiles] = $this->calcSignature();
+    private function discoverModules(): void
+    {
+        [$signature] = $this->calcSignature();
 
         $cacheKey = 'modules.registry.v1';
-        $cached = $this->f4->cache_get($cacheKey, null);
-        if (is_array($cached) && ($cached['signature'] ?? '') === $signature) {
-            $this->modules = $cached['modules'] ?? [];
+        $cached = $this->cache->get($cacheKey);
+
+        if (
+            is_array($cached)
+            && ($cached['signature'] ?? '') === $signature
+            && !empty($cached['modules'])
+            && is_array($cached['modules'])
+        ) {
+            $this->modules = $cached['modules'];
             return;
         }
 
         $found = [];
-
-        // Важно: local должен перекрывать lib
         $roots = [
-            SITE_ROOT.'lib/app/Modules',
-            SITE_ROOT.'local/app/Modules',
+            SITE_ROOT . 'lib/modules',
+            SITE_ROOT . 'local/modules',
         ];
 
         foreach ($roots as $root) {
-            if (!is_dir($root)) continue;
+            if (!is_dir($root)) {
+                continue;
+            }
 
-            // берём только setting.yaml на глубине "одна папка = модуль"
-            // проще всего так: собрали все */setting.yaml и по ним итерируемся
-            $files = FileWalker::collect($root, ['*/setting.yaml'], [], []);
+            $files = \App\Utils\Fs::collect($root, ['*/setting.yaml'], [], []);
             foreach ($files as $full => $rel) {
                 $moduleDir = dirname($full);
-                $yaml = Yaml::parseFile($full) ?: [];
+                $yaml = \Symfony\Component\Yaml\Yaml::parseFile($full) ?: [];
                 $settings = ModuleSettings::fromArray(is_array($yaml) ? $yaml : [], $full);
+
                 $this->scaffoldModuleData($moduleDir);
 
                 $slug = $this->makeSlugFromDir($moduleDir);
-
-                $includePath = $moduleDir . '/' . $settings->include;
 
                 $found[$slug] = [
                     'slug' => $slug,
@@ -103,7 +203,7 @@ final class ModuleRegistry
                     'priority' => $settings->priority,
                     'base_path' => $moduleDir,
                     'settings_path' => $full,
-                    'include_path' => $includePath,
+                    'include_path' => $moduleDir . '/' . $settings->include,
                     'settings' => $settings->raw,
                     'source_root' => $root,
                 ];
@@ -112,68 +212,30 @@ final class ModuleRegistry
 
         $this->modules = $found;
 
-        $this->f4->cache_set($cacheKey, [
+        $this->cache->set($cacheKey, [
             'signature' => $signature,
             'modules' => $this->modules,
-        ], 0);
+        ]);
     }
 
-    private function load_modules(): void
-    {
-        // сортировка по priority (больше = раньше)
-        uasort($this->modules, fn($a,$b) => ($b['priority'] ?? 50) <=> ($a['priority'] ?? 50));
-
-        foreach ($this->modules as $slug => $m) {
-            if (empty($m['active'])) continue;
-
-            $inc = $m['include_path'];
-            if (!is_file($inc)) {
-                throw new \RuntimeException("Module '{$slug}' include.php not found: {$inc}");
-            }
-            require_once $inc;
-        }
-    }
-
-    private function scaffoldModuleData(string $moduleDir): void
-    {
-        $dataDir = rtrim($moduleDir, '/\\') . '/data';
-
-        if (!is_dir($dataDir)) {
-            // если модуль лежит в lib и права только на чтение — mkdir может не получиться
-            @mkdir($dataDir, 0775, true);
-        }
-
-        $files = [
-            'routes.php' => $this->tplRoutes(),
-            'dependencies.php' => $this->tplDependencies(),
-            'schedule.php' => $this->tplSchedule(),
-            'constants.php' => $this->tplConstants(),
-        ];
-
-        foreach ($files as $name => $content) {
-            $path = $dataDir . '/' . $name;
-
-            if (is_file($path)) continue;          // не перетираем
-            if (!is_dir($dataDir)) continue;       // если папка не создалась, тихо пропускаем или кидаем ошибку в dev
-
-            $this->atomicWriteIfNotExists($path, $content);
-        }
-    }
-
-    /** @return array{0:string,1:array} */
     private function calcSignature(): array
     {
         $roots = [
-            SITE_ROOT.'lib/app/Modules',
-            SITE_ROOT.'local/app/Modules',
+            SITE_ROOT . 'lib/modules',
+            SITE_ROOT . 'local/modules',
         ];
 
         $filesAll = [];
         foreach ($roots as $root) {
-            if (!is_dir($root)) continue;
-            $files = FileWalker::collect($root, ['*/setting.yaml'], [], []);
-            foreach ($files as $full => $rel) $filesAll[] = $full;
+            if (!is_dir($root)) {
+                continue;
+            }
+            $files = Fs::collect($root, ['*/setting.yaml'], [], []);
+            foreach ($files as $full => $rel) {
+                $filesAll[] = $full;
+            }
         }
+
         sort($filesAll);
 
         $parts = [];
@@ -187,23 +249,9 @@ final class ModuleRegistry
     private function makeSlugFromDir(string $moduleDir): string
     {
         $name = basename(rtrim($moduleDir, '/\\'));
-
-        // 1) только латиница/цифры/_.-
-        if (!preg_match('/^[A-Za-z0-9_\.\-]+$/', $name)) {
-            throw new \RuntimeException("Module folder '{$name}' has invalid chars. Allowed: [A-Za-z0-9_.-]");
-        }
-
-        // 2) lowercase
-        $slug = strtolower($name);
-
-        // 3) . и - в _
-        $slug = str_replace(['.', '-'], '_', $slug);
-
-        // 4) схлопываем подряд идущие _
+        $slug = strtolower(str_replace(['.', '-'], '_', $name));
         $slug = preg_replace('/_+/', '_', $slug);
-
-        // 5) trim _
-        $slug = trim($slug, '_');
+        $slug = trim((string)$slug, '_');
 
         if ($slug === '') {
             throw new \RuntimeException("Module folder '{$name}' produces empty slug.");
@@ -212,37 +260,49 @@ final class ModuleRegistry
         return $slug;
     }
 
-    private function atomicWriteIfNotExists(string $path, string $content): void
+    private function scaffoldModuleData(string $moduleDir): void
     {
-        // двойная проверка на гонки
-        if (is_file($path)) return;
+        $dataDir = rtrim($moduleDir, '/\\') . '/data';
 
-        $tmp = $path . '.tmp.' . uniqid('', true);
-        file_put_contents($tmp, $content, LOCK_EX);
-        @chmod($tmp, 0664);
+        if (!is_dir($dataDir)) {
+            @mkdir($dataDir, 0775, true);
+        }
 
-        // rename атомарен на одном FS
-        @rename($tmp, $path);
+        $files = [
+            'routes.php' => $this->tplRoutes(),
+            '.definitions.php' => $this->tplDefinitions(),
+            'schedule.php' => $this->tplSchedule(),
+            'constants.php' => $this->tplConstants(),
+        ];
 
-        // если rename не случился (например, другой процесс успел) — чистим tmp
-        if (!is_file($path) && is_file($tmp)) @unlink($tmp);
+        foreach ($files as $name => $content) {
+            $path = $dataDir . '/' . $name;
+            if (!is_dir($dataDir)) {
+                continue;
+            }
+            if (!is_file($path)) {
+                file_put_contents($path, $content, LOCK_EX);
+            }
+        }
     }
 
     private function tplRoutes(): string
     {
         return "<?php\ndeclare(strict_types=1);\n\nreturn function(\\App\\F4 \$f4): void {\n    // \$f4->route('GET /test', 'Test\\\\Controller\\\\Home->index');\n};\n";
     }
-    private function tplDependencies(): string
+
+    private function tplDefinitions(): string
     {
-        return "<?php\ndeclare(strict_types=1);\n\nreturn function(\$di): void {\n    // \$di->set(Test\\\\Service\\\\Foo::class, DI\\\\create(...));\n};\n";
+        return "<?php\ndeclare(strict_types=1);\n\nuse function DI\\create;\n\nreturn [\n    // Test\\\\Service\\\\Foo::class => create(Test\\\\Service\\\\Foo::class),\n];\n";
     }
+
     private function tplSchedule(): string
     {
-        return "<?php\ndeclare(strict_types=1);\n\nreturn [\n    // [\n    //   'id' => 'test:demo',\n    //   'cron' => '*/5 * * * *',\n    //   'handler' => 'Test\\\\Jobs\\\\DemoJob->run',\n    // ],\n];\n";
+        return "<?php\ndeclare(strict_types=1);\n\nreturn [\n    // ['id' => 'test:demo', 'cron' => '*/5 * * * *', 'handler' => 'Test\\\\Jobs\\\\DemoJob->run'],\n];\n";
     }
+
     private function tplConstants(): string
     {
         return "<?php\ndeclare(strict_types=1);\n\nreturn [\n    // 'TEST_CONST' => 123,\n];\n";
     }
-
 }

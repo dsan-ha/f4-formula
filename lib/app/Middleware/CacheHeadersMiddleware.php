@@ -5,11 +5,12 @@ namespace App\Middleware;
 use App\F4;
 use App\Http\Request;
 use App\Http\Response;
+use App\Http\MiddlewareInterface;
 
 /**
  * Заголовки кеширования.
  */
-final class CacheHeadersMiddleware
+final class CacheHeadersMiddleware implements MiddlewareInterface
 {
     public function __invoke(Request $req, Response $res, array $params, callable $next): Response
     {

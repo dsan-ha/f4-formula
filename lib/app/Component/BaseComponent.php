@@ -76,18 +76,78 @@ abstract class BaseComponent {
         $template->set('templateFolder',$this->getUIPath($this->folder, true));
         $template->set('templateName',$this->templateName);
         $template->set('component',$this);
-        $this->includeStyleScript();
 
         $helper = $this->f4->getDI(\App\View\CacheHelper::class) ?? null;
 
         $renderer = function() use ($template, $templatePath, $arParams) {
+            $this->runResultModifier($arParams);
             return $template->render($templatePath, $arParams);
         };
-        if ($helper instanceof \App\View\CacheHelper) {
-            return $helper->renderWithCache($this, $arParams, $renderer);
+        $html = ($helper instanceof \App\View\CacheHelper)
+            ? $helper->renderWithCache($this, $arParams, $renderer)
+            : $renderer();
+        $html .= $this->renderComponentEpilog($arParams);
+        $this->includeStyleScript();
+        return $html;
+    }
+
+    protected function runResultModifier(array $arParams): void
+    {
+        $modifierAbs = $this->getUIPath($this->folder . 'result_modifier.php', false);
+        if (empty($modifierAbs) || !is_file($modifierAbs)) {
+            return;
         }
 
-        return $renderer();
+        // переменные, которыми обычно пользуются в modifier
+        $arResult = &$this->arResult;
+        $component = $this;
+        $assets = $this->assets;
+        $templateFolder = $this->getUIPath($this->folder, true);
+        $templateName = $this->templateName;
+
+        // делаем scope под Bitrix: $this->__component
+        $scope = new class($this) {
+            public \App\Component\BaseComponent $__component;
+            public function __construct(\App\Component\BaseComponent $component) { $this->__component = $component; }
+        };
+
+        // modifier не должен печатать ничего, поэтому глушим вывод
+        ob_start();
+        try {
+            (function() use ($modifierAbs, &$arResult, $arParams, $component, $assets, $templateFolder, $templateName) {
+                include $modifierAbs;
+            })->call($scope);
+        } catch (\Throwable $e) {
+            ob_end_clean();
+            throw $e;
+        }
+        ob_end_clean();
+    }
+
+
+    protected function renderComponentEpilog(array $arParams): string
+    {
+        $epilogRel = $this->folder . 'component_epilog.php';
+        $epilogAbs = $this->getUIPath($epilogRel, false);
+        if (empty($epilogAbs) || !is_file($epilogAbs)) {
+            return '';
+        }
+
+        // Переменные, к которым привыкли в Bitrix
+        $component = $this;
+        $arResult = &$this->arResult;
+        $templateName = $this->templateName;
+        $templateFolder = $this->getUIPath($this->folder, true);
+        $assets = $this->assets;
+
+        ob_start();
+        try {
+            include $epilogAbs;
+        } catch (\Throwable $e) {
+            ob_end_clean();
+            throw $e;
+        }
+        return (string)ob_get_clean();
     }
 
     protected function getUIPath($path, bool $uri = false){

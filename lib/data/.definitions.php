@@ -53,10 +53,7 @@ return [
     // template()->render()
     App\View\Template::class => create(App\View\Template::class)->constructor(get(F4::class),get(App\View\CacheHelper::class), $UIpaths),
     // app()
-    App\App::class => create(App\App::class)->constructor(get(F4::class),get(App\Utils\Assets::class), get(ComponentManager::class)),
-    App\Modules\ModuleRegistry::class => create(App\Modules\ModuleRegistry::class)
-    ->constructor(get(App\F4::class), get(App\Utils\Cache::class)),
-    App\Modules\ModuleAutoloader::class => DI\create(App\Modules\ModuleAutoloader::class)
+    App\App::class => create(App\App::class)->constructor(get(F4::class),get(App\Utils\Assets::class), get(ComponentManager::class))
 ];
 
 

@@ -128,11 +128,13 @@ class Response
 
     public function makeBody(): array
     {
-        return [
+        $body = [
             'flag'   => $this->flag,
             'data'   => $this->data,
             'errors' => $this->errors,
         ];
+        if(!empty($this->errors)) $body['error'] = $this->errors[array_keys($this->errors)[0]];
+        return $body;
     }
     
     public function ok(array $data = []): self
@@ -143,14 +145,76 @@ class Response
         return $this;
     }
 
-    public function error(string $message = '', ?string $field = null): self
+    public function error(string|array|\Throwable $message = '', array $data = []): self
     {
+        // если вызвали просто ->error() без текста
         $this->flag = 'error';
-        if ($message !== '') {
-            $field ? $this->addError([$field, $message]) : $this->addError([$message]);
+        $this->data = $data;
+
+        if ($message instanceof \Throwable) {
+            $message = $message->getMessage();
         }
+
+        // строка
+        if (is_string($message)) {
+            $msg = trim($message);
+            if ($msg !== '') {
+                $this->addError([$msg]);
+            }
+            return $this;
+        }
+
+        // массив
+        if (is_array($message)) {
+            if ($message === []) {
+                return $this;
+            }
+
+            // список ошибок: [[...], [...]]
+            $isListOfErrors = isset($message[0]) && is_array($message[0]);
+            if ($isListOfErrors) {
+                foreach ($message as $err) {
+                    if (!is_array($err)) continue;
+
+                    // [field, message] или [message]
+                    $cnt = count($err);
+                    if ($cnt === 1) {
+                        $this->addError([(string)array_values($err)[0]]);
+                    } elseif ($cnt === 2) {
+                        $vals = array_values($err);
+                        $this->addError([(string)$vals[0], (string)$vals[1]]);
+                    }
+                }
+                return $this;
+            }
+
+            // форма ['field'=>..., 'message'=>...]
+            if (isset($message['message'])) {
+                $field = (string)($message['field'] ?? '');
+                $msg   = (string)$message['message'];
+                $this->addError($field !== '' ? [$field, $msg] : [$msg]);
+                return $this;
+            }
+
+            // форма [field, message] или [message]
+            $cnt = count($message);
+            if ($cnt === 1) {
+                $this->addError([(string)array_values($message)[0]]);
+            } elseif ($cnt === 2) {
+                $vals = array_values($message);
+                $this->addError([(string)$vals[0], (string)$vals[1]]);
+            } else {
+                $this->addError(['Неизвестная ошибка']);
+            }
+
+            return $this;
+        }
+
+        // всё остальное
+        $this->addError(['Неизвестная ошибка']);
         return $this;
     }
+
 
     public function fromResult(\App\Http\Result $r): self
     {
@@ -167,5 +231,15 @@ class Response
             $this->error('Ошибка');
         }
         return $this->withStatus($r->status);
+    }
+    
+    /**
+    *   json answer
+    *   @return Response
+    **/
+    public function json(Response $res): Response
+    {
+        $bodyArray = $res->makeBody();
+        return $res->withHeader('Content-Type','application/json; charset=utf-8')->withBody(json_encode($bodyArray, JSON_UNESCAPED_UNICODE ));
     }
 }

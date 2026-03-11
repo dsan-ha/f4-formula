@@ -9,6 +9,7 @@ final class ModuleSettings
     public string $name;
     public string $namespace;
     public bool $active;
+    public bool $install = false;
     public int $priority = 50;
     public string $include = 'include.php';
     public array $raw = [];
@@ -41,12 +42,19 @@ final class ModuleSettings
             throw ModuleConfigException::invalid($settingsPath, "module.namespace has invalid format.");
         }
 
+        $install = $m['install'] ?? false;
+        if (is_int($install)) $install = (bool)$install;
+        if (!is_bool($install)) {
+            throw ModuleConfigException::invalid($settingsPath, "module.install must be boolean.");
+        }
+
         $s = new self();
         $s->name = $m['name'];
         $s->active = $m['active'];
         $s->priority = isset($m['priority']) ? (int)$m['priority'] : 50;
         $s->namespace = $m['namespace'];
         $s->include = 'include.php';
+        $s->install = $install;
         $s->raw = $yaml;
 
         return $s;

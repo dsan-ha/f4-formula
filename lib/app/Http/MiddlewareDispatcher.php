@@ -78,7 +78,6 @@ class MiddlewareDispatcher
             if ($mw instanceof MiddlewareInterface || method_exists($mw, '__invoke')) {
                 $out = $mw($req, $res, $args, $next);
             } elseif (method_exists($mw, 'handle')) {
-                // на всякий случай: поддержка handle()
                 $out = $mw->handle($req, $res, $args, $next);
             } else {
                 throw new \InvalidArgumentException('Middleware object must be invokable (__invoke) or have handle()');

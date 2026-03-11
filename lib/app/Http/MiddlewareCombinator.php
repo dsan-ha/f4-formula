@@ -48,7 +48,6 @@ final class MiddlewareCombinator
         $noopNext = function (Request $req, Response $res, array $args): Response {
             return $res;
         };
-
         foreach ($hooks as [$mw, $st]) {
             $out = $mw($req, $res, $args, $noopNext);
 

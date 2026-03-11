@@ -1,0 +1,7 @@
+module:
+  name: 'Test module'
+  namespace: Test
+  active: true
+  priority: 50
+  test_vers: 1
+  install: true

@@ -5,11 +5,12 @@ namespace App\Middleware;
 use App\F4;
 use App\Http\Request;
 use App\Http\Response;
+use App\Http\MiddlewareInterface;
 
 /**
  * Системные заголовки безопасности.
  */
-final class SecurityHeadersMiddleware
+final class SecurityHeadersMiddleware implements MiddlewareInterface
 {
     public function __invoke(Request $req, Response $res, array $params, callable $next): Response
     {

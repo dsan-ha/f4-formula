@@ -1,6 +1,0 @@
-module:
-  name: Test module   # обязательно
-  namespace: Test     # обязательно
-  active: true        # обязательно (bool)
-  priority: 50        # не обяз, int (для порядка загрузки)
-  test_vers: 1

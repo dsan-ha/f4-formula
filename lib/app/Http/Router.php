@@ -296,8 +296,9 @@ class Router {
                 $this->redirect($item,$url,$permanent);
             return;
         }
-        $this->route($pattern,function($fw) use($url,$permanent) {
-            $fw->reroute($url,$permanent);
+        $f4 = $this->f4;
+        $this->route($pattern,function($req, $res) use($f4,$url,$permanent) {
+            $f4->reroute($url,$permanent);
         });
     }
 

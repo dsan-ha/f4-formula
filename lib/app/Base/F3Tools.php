@@ -1269,6 +1269,7 @@ trait F3Tools {
             'EXCEPTION'=>NULL,
             'EXEMPT'=>NULL,
             'FORMATS'=>[],
+            'JSON_SECURE'=>TRUE, 
             'HALT'=>TRUE,
             'HIGHLIGHT'=>FALSE,
             'LOCK'=>LOCK_EX,

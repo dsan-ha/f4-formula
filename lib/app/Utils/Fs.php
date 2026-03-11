@@ -1,14 +1,85 @@
 <?php
+declare(strict_types=1);
+
 namespace App\Utils;
 
 // Класс для обхода файлов и папок с фильтрацией по файлам и папкам
 // Example
-// FileWalker::collect('path/to/folder',
+// Fs::collect('path/to/folder',
 //      $include = ['rel/include/path1/**'],
 //      $exclude = ['**/exclude.file','*/exlude_for_root.file'],
 //      $excludeFolders = ['rel/exclude_folder/path1']);
-class FileWalker
+final class Fs
 {
+    public static function ensureDir(string $dir, int $mode = 0775): void
+    {
+        if (is_dir($dir)) return;
+        if (!@mkdir($dir, $mode, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Cannot create directory: {$dir}");
+        }
+    }
+
+    /**
+     * Зеркалит дерево src -> dst (внутрь dst), возвращает список записанных файлов (для манифеста).
+     * @return array{copied: array<int,string>, backed_up: array<int,string>, skipped: array<int,string>}
+     */
+    public static function mirror(string $src, string $dst, array $opt = []): array
+    {
+        $overwrite = (bool)($opt['overwrite'] ?? true);
+        $backupDir = (string)($opt['backup_dir'] ?? '');
+
+        $src = rtrim($src, '/\\');
+        $dst = rtrim($dst, '/\\');
+
+        if (!is_dir($src)) {
+            return ['copied' => [], 'backed_up' => [], 'skipped' => []];
+        }
+
+        self::ensureDir($dst);
+
+        $copied = [];
+        $backed = [];
+        $skipped = [];
+
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($it as $node) {
+            $full = (string)$node->getPathname();
+            $rel = ltrim(str_replace('\\', '/', substr($full, strlen($src))), '/');
+            $target = $dst . '/' . $rel;
+
+            if ($node->isDir()) {
+                self::ensureDir($target);
+                continue;
+            }
+
+            self::ensureDir(dirname($target));
+
+            if (is_file($target) && !$overwrite) {
+                $skipped[] = $target;
+                continue;
+            }
+
+            if (is_file($target) && $backupDir !== '') {
+                $backupPath = rtrim($backupDir, '/\\') . '/' . $rel;
+                self::ensureDir(dirname($backupPath));
+                @copy($target, $backupPath);
+                $backed[] = $backupPath;
+            }
+
+            if (!@copy($full, $target)) {
+                throw new \RuntimeException("Copy failed: {$full} -> {$target}");
+            }
+            @chmod($target, 0664);
+            $copied[] = $target;
+        }
+
+        return ['copied' => $copied, 'backed_up' => $backed, 'skipped' => $skipped];
+    }
+
     public static function collect(
         string $root,
         array $include = [],
@@ -44,6 +115,11 @@ class FileWalker
         }
 
         return $files;
+    }
+
+    public static function removeFile(string $path): void
+    {
+        if (is_file($path) || is_link($path)) @unlink($path);
     }
 
     private static function relPath(string $full, string $root): string

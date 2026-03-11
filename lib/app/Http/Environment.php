@@ -245,13 +245,22 @@ final class Environment
             ? (int)$_SERVER['SERVER_PORT']
             : ($this->scheme === 'https' ? 443 : 80);
 
-        // Единственное чтение тела
         $this->rawBody = $readBody ? file_get_contents('php://input') : null;
 
-        // НОВОЕ: нормализованное body (строка или массив)
+        $f4 = \App\F4::instance();
         $contentType = $headers['content-type'] ?? ($_SERVER['CONTENT_TYPE'] ?? null);
         if ($readBody && $this->rawBody !== null && stripos((string)$contentType, 'application/json') !== false) {
-            $this->body = self::decodeJsonSecure($this->rawBody);
+            if($f4->get('JSON_SECURE')){
+                $this->body = self::decodeJsonSecure();
+            } else {
+                try {
+                    $this->body = json_decode($this->rawBody, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException $e) {
+                    // логни $e->getMessage() и кусок $raw, верни 400
+                    exit('Bad body or headers');
+                }
+            }
+
         } else {
             $this->body = $this->rawBody;
         }

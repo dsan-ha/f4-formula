@@ -6,7 +6,7 @@ use GO\Scheduler as GoScheduler;
 
 class Scheduler
 {
-    protected Scheduler $scheduler;
+    protected GoScheduler $scheduler;
 
     public function __construct()
     {

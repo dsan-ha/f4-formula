@@ -45,4 +45,5 @@ final class Result
     {
         return $this->flag === 'ok';
     }
+
 }

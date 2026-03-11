@@ -54,6 +54,12 @@ class F4
         $router->reroute($url,$permanent,$die);
     }
 
+    public function redirect($pattern,$url,$permanent=TRUE) {
+        $router = $this->get('Router') ?? throw new \RuntimeException(self::E_Router);
+        $router->redirect($pattern,$url,$permanent);
+    }
+
+
     /**
      * Load config from YAML or delegate to Base::config()
      */
@@ -145,6 +151,7 @@ class F4
         $val = $this->ref($key, false);
         if (is_null($val)) {
             if (!is_null($def)) {
+                $this->set($key, $def);
                 return $def;
             } elseif (is_object($this->cache) && $this->cache_exists($this->hash($key).'.var', $data)) {
                 return $data;

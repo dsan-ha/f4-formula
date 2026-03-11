@@ -23,6 +23,20 @@
     }
     return true;
   };
+
+  function wrapOnHandlers(ractive, map) {
+    const out = {};
+    Object.keys(map).forEach((name) => {
+      const fn = map[name];
+      if (typeof fn !== 'function') return;
+
+      // гарантируем, что this внутри fn = ractive
+      out[name] = function (...args) {
+        return fn.apply(ractive, args);
+      };
+    });
+    return out;
+  }
   
   const assignAt = (obj, path, value) => {
     if (!path) return value;
@@ -79,7 +93,10 @@
       rState.r_actions = Object.freeze(actions);
 
       (cfg.rData || []).forEach(item => {
-        const { code, el, template, on = {}, options = {} } = item;
+        const { code, el, template, options = {} } = item;
+        const onCfg = cfg.on;
+        const userOninit = options.oninit;
+        delete cfg.on;
         let rawKeys = item.keys; // может быть строкой или массивом
 
         if (!el || !template) { console.error('[component] rData: нужен el и template', item); return; }
@@ -119,12 +136,27 @@
         }
         initialData['r_actions'] = actions;
 
-        const child = new Ractive(Object.assign({ el: $el[0], template, data: initialData }, cfg.options, options));
+        options.oninit = function (...args) {
+          // достаём обработчики: только для этого code
+          const scoped = (onCfg && code && onCfg[code]) ? onCfg[code] : null;
 
+          if (scoped && typeof scoped === 'object') {
+            // чтобы потом снять при teardown (и не ловить двойные бинды)
+            const handles = this.on(wrapOnHandlers(this, scoped));
+            this.__cmpOnHandles = (this.__cmpOnHandles || []).concat(handles || []);
+          }
+
+          // дальше твой oninit как есть
+          if (typeof userOninit === 'function') {
+            return userOninit.apply(this, args);
+          }
+        };
+
+        const child = new Ractive(Object.assign({ el: $el[0], template, data: initialData }, options));
+        
         // навесим события: общие + локальные
         const bindEvents = (inst, map) => Object.keys(map || {}).forEach(evt => inst.on(evt, map[evt]));
         bindEvents(child, cfg.events);
-        bindEvents(child, on);
 
         // двусторонняя синхронизация
         let guardParent = false, guardChild = false;
