@@ -16,4 +16,6 @@ echo app_component(
 );
 
 echo '<br>'.$f4->get('module.test.mess');
+
+var_export($f4->get('COMPONENTS'));
 ?>

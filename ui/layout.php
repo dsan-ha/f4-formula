@@ -21,6 +21,9 @@ $assets->addJs('/ui/js/main.js');?>
 		<meta name="color-scheme" content="light dark">
         <title><?=$app->getMeta('title','fff сайт')?></title>
 		<? $app->showHead();?>
+        <script>
+            window._csrf = <?php echo json_encode($arParams['csrf']);?>;
+        </script>
 	</head>
 
   	<body>

@@ -31,10 +31,9 @@ final class ModuleRegistry
     public function bootstrap(): void
     {
         $this->discoverModules();
+        $this->f4->set('MODULES', $this->modules);
         $this->registerAutoload();
         $this->installMissing();
-
-        $this->f4->set('MODULES', $this->modules);
     }
 
     public function all(): array

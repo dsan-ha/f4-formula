@@ -7,7 +7,9 @@ use App\Events\EventManager;
 use App\Http\Environment;
 use App\Utils\Cache\FileCacheAdapter;
 use App\Service\DataManagerRegistry;
-use App\Component\ComponentManager;
+use App\Component\ComponentManager;    
+use App\Middleware\CsrfMiddleware;
+use App\Utils\Security\CsrfTokenManager;
 use function DI\autowire;
 use function DI\create;
 use function DI\get;
@@ -53,7 +55,13 @@ return [
     // template()->render()
     App\View\Template::class => create(App\View\Template::class)->constructor(get(F4::class),get(App\View\CacheHelper::class), $UIpaths),
     // app()
-    App\App::class => create(App\App::class)->constructor(get(F4::class),get(App\Utils\Assets::class), get(ComponentManager::class))
+    App\App::class => create(App\App::class)->constructor(get(F4::class),get(App\Utils\Assets::class), get(ComponentManager::class)),
+    // CSRF Protection
+    CsrfMiddleware::class => create(CsrfMiddleware::class)
+        ->constructor(get(SessionService::class)),
+    CsrfTokenManager::class => create(CsrfTokenManager::class)
+        ->constructor(get(SessionService::class)),
+    App\Migrations\PhinxMigrator::class => DI\create(App\Migrations\PhinxMigrator::class),
 ];
 
 

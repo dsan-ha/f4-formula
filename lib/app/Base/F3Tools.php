@@ -120,6 +120,9 @@ trait F3Tools {
         $this->set('EventManager',$this->getDI(\App\Events\EventManager::class));
         $this->set('SessionService', $this->getDI(\App\Base\SessionService::class));
         $this->set('CookieService',  $this->getDI(\App\Base\CookieService::class));
+        if (!$this->exists('COMPONENTS', $components) || !is_array($components)) {
+            $this->set('COMPONENTS', []);
+        }
         if ($this->exists('JAR', $jar) && is_array($jar)) {
             $this->get('CookieService')->configure($jar);
         }

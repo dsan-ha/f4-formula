@@ -17,3 +17,4 @@ cache:
 log:
   log_folder: 'lib/tmp/log/'
   json_log: 'lib/tmp/log/json_sus.log'
+migrator_secret: ""

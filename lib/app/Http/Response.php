@@ -2,7 +2,9 @@
 
 namespace App\Http;
 
-class Response
+use App\Http\I\ResponseInterface;
+
+class Response implements ResponseInterface
 {
     protected int $status = 200;
     protected array $headers = [];

@@ -3,5 +3,10 @@ use App\Http\MiddlewareState;
 
 $f4 = App\F4::instance();
 
-$f4->add(new \App\Middleware\SecurityHeadersMiddleware(), MiddlewareState::after(9000));
-$f4->add(new \App\Middleware\CacheHeadersMiddleware(), MiddlewareState::after(9001));
+// CSRF защита (проверка токена) 
+//$f4->add($f4->getDI(\App\Middleware\CsrfMiddleware::class), MiddlewareState::before(500));
+
+// Безопасность заголовков
+$f4->add($f4->getDI(\App\Middleware\SecurityHeadersMiddleware::class), MiddlewareState::after(9000));
+// Кэширование заголовков
+$f4->add($f4->getDI(\App\Middleware\CacheHeadersMiddleware::class), MiddlewareState::after(9001));

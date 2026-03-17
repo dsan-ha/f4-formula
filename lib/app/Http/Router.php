@@ -7,8 +7,9 @@ use App\Http\Response;
 use App\Http\Request;
 use App\Http\MiddlewareState;
 use App\Http\MiddlewareCombinator;
+use App\Http\I\RouterInterface;
 
-class Router {
+class Router implements RouterInterface {
     protected array $groups = [];
     protected ?RouterGroups $currentGroup = null;
 

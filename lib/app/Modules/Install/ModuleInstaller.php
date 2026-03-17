@@ -10,10 +10,16 @@ use Symfony\Component\Yaml\Yaml;
 final class ModuleInstaller
 {
     private F4 $f4;
+    private string $backupDir;
+    private string $dir_manifest;
 
     public function __construct(F4 $f4)
     {
         $this->f4 = $f4;
+        $this->backupDir = rtrim(SITE_ROOT, '/\\') . '/local/tmp/modules/.module_backup';
+        $this->dir_manifest = rtrim(SITE_ROOT, '/\\') . '/local/tmp/modules/_install_manifest';
+        Fs::ensureDir($this->backupDir);
+        Fs::ensureDir($this->dir_manifest);
     }
 
     /**
@@ -52,9 +58,9 @@ final class ModuleInstaller
         $uiDst = rtrim(SITE_ROOT, '/\\') . '/ui';
 
         if(is_dir($uiSrc)){
-            $backupDir = rtrim(SITE_ROOT, '/\\') . '/ui/.module_backup/' . (string)($m['slug'] ?? 'unknown') . '/' . date('Ymd_His');
+            $backupDir =  $this->backupDir . '/' . (string)($m['slug'] ?? 'unknown') . '/' . date('Ymd_His');
             $res = Fs::mirror($uiSrc, $uiDst, [
-                'overwrite' => true,
+                'overwrite' => false,
                 'backup_dir' => $backupDir,
             ]);
 
@@ -137,8 +143,7 @@ final class ModuleInstaller
     private function writeManifest(array $m, array $files): void
     {
         $slug = (string)($m['slug'] ?? 'unknown');
-        $dir = rtrim(SITE_ROOT, '/\\') . '/local/data/modules/_install_manifest';
-        Fs::ensureDir($dir);
+        
 
         $payload = [
             'slug' => $slug,
@@ -146,6 +151,6 @@ final class ModuleInstaller
             'ui_files' => array_values($files),
         ];
 
-        file_put_contents($dir . '/' . $slug . '.json', json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
+        file_put_contents($this->dir_manifest . '/' . $slug . '.json', json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
     }
 }
