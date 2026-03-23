@@ -56,4 +56,4 @@ if(defined('SITE_ROOT')){
     $migration_config['migration_base_class'] = \App\Migrations\ModuleMigration::class;
 }
 
-return $migration_config
+return $migration_config;

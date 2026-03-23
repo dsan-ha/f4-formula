@@ -79,7 +79,7 @@ abstract class DataManager {
 
             $val = $data[$field];
 
-            if (!empty($rules['type'])) {
+            if (!empty($rules['type']) && !($rules['nullable'] && is_null($val))) {
                 $type = $rules['type'];
                 switch ($type) {
                     case 'string':

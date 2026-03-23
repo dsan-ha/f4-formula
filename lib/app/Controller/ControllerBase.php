@@ -37,6 +37,7 @@ abstract class ControllerBase
                 'token' => $this->csrf->token(),
                 'key' => $this->csrf->getTokenKey()
             ];
+            $this->f4->set('_csrf',$arParams['csrf']);
         }
         $html = $app->render($arParams);          
         return $res->withBody($html);  

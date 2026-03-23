@@ -13,6 +13,7 @@ class PhinxMigrator
 {
     protected string $configPath;
     protected string $snapshotDir;
+    protected F4 $f4;
     protected PhinxApplication $phinxApp;
 
     public function __construct(?string $configPath = null, ?string $snapshotDir = null)
@@ -22,7 +23,9 @@ class PhinxMigrator
             : dirname(__DIR__, 3);
 
         $this->configPath = $configPath ?: $root . '/lib/phinx.php';
-        $this->snapshotDir = $snapshotDir ?: $root . '/local/backups/snapshots/';
+        $this->f4 = F4::instance();
+        $dir = $this->f4->g('migrator_snapshot_dir', 'local/tmp/migrator/snapshots');
+        $this->snapshotDir = $snapshotDir ?: $root . '/'. trim($dir,'\\/');
 
         $this->phinxApp = new PhinxApplication();
         $this->phinxApp->setAutoExit(false);
@@ -189,7 +192,7 @@ class PhinxMigrator
 
     protected function moduleDescriptor(string $slug): array
     {
-        $modules = (array) F4::instance()->get('MODULES');
+        $modules = (array) $this->f4->get('MODULES');
         $module = $modules[$slug] ?? null;
 
         if (!is_array($module)) {
