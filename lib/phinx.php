@@ -2,6 +2,17 @@
 // vendor/bin/phinx create InitTelegramBotSchema
 
 use App\F4;
+$f4 = F4::instance();
+$dsn  = $f4->g('db.dsn','mysql:host=mysql-8.4;port=3306;dbname=fff_skeleton');
+$ar_dsn = explode(';',$dsn);
+$ar_db = [];
+
+foreach ($ar_dsn as $value) {
+    $d = explode('=',$value);
+    $ar_db[$d[0]] = $d[1];
+}
+$user = $f4->g('db.login','root');
+$pass = $f4->g('db.pass','root');
 
 $migration_config = [
     'paths' => [
@@ -13,11 +24,11 @@ $migration_config = [
         'default_environment' => 'development',
         'development' => [
             'adapter' => 'mysql',
-            'host' => 'mysql-5.7',
-            'name' => 'fff_skeleton',
-            'user' => 'root',
-            'pass' => 'root',
-            'port' => 3306,
+            'host' => $ar_db['mysql:host'] ?? 'mysql-8.4',
+            'name' => $ar_db['dbname'] ?? 'fff_skeleton',
+            'user' => $user,
+            'pass' => $pass,
+            'port' => $ar_db['port'] ?? 3306,
             'charset' => 'utf8',
         ],
     ],

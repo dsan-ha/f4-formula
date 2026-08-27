@@ -6,9 +6,6 @@ use App\Base\ServiceLocator;
  * f3_cache - для вызова кэша
 **/
 
-function f4(){
-    return \App\F4::instance();
-}
 function app(){
     return \App\F4::instance()->getDI(\App\App::class);
 }

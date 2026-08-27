@@ -78,8 +78,8 @@ abstract class DataManager {
             if (!$isPresent) continue;
 
             $val = $data[$field];
-
-            if (!empty($rules['type']) && !($rules['nullable'] && is_null($val))) {
+            $null = (!empty($rules['nullable']) || !empty($rules['null'])) && is_null($val);
+            if (!empty($rules['type']) && !$null) {
                 $type = $rules['type'];
                 switch ($type) {
                     case 'string':
@@ -312,7 +312,7 @@ abstract class DataManager {
                 'json'     => 'JSON',
                 default    => 'VARCHAR(' . ($rules['length'] ?? 255) . ')',
             };
-            $nullable = !empty($rules['nullable']) ? 'NULL' : 'NOT NULL';
+            $nullable = !empty($rules['nullable']) || !empty($rules['null']) ? 'NULL' : 'NOT NULL';
             $default  = '';
             if (array_key_exists('default', $rules)) {
                 $def = $rules['default'];

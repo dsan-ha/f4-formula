@@ -200,6 +200,7 @@ final class ModuleRegistry
                     'active' => $settings->active,
                     'namespace' => $settings->namespace,
                     'priority' => $settings->priority,
+                    'update_permanent' => $settings->update_permanent,
                     'base_path' => $moduleDir,
                     'settings_path' => $full,
                     'include_path' => $moduleDir . '/' . $settings->include,
@@ -247,10 +248,13 @@ final class ModuleRegistry
 
     private function makeSlugFromDir(string $moduleDir): string
     {
-        $name = basename(rtrim($moduleDir, '/\\'));
-        $slug = strtolower(str_replace(['.', '-'], '_', $name));
-        $slug = preg_replace('/_+/', '_', $slug);
-        $slug = trim((string)$slug, '_');
+        $name = strtolower(basename(rtrim($moduleDir, '/\\')));
+        $slug = preg_replace('/\.+/', '.', $name);
+        $slug = trim((string)$slug, '.');
+        
+        if (!preg_match('/^[a-z0-9\.]+$/', $name) || $name !== $slug) {
+            throw new \InvalidArgumentException("Invalid module folder name.");
+        }
 
         if ($slug === '') {
             throw new \RuntimeException("Module folder '{$name}' produces empty slug.");

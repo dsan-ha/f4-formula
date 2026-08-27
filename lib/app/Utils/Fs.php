@@ -87,18 +87,28 @@ final class Fs
         array $excludeFolders = []
     ): array {
         $files = [];
+
+        $root = rtrim(str_replace('\\', '/', $root), '/');
+
+        if (!is_dir($root)) {
+            return $files;
+        }
+
+        $include = self::normalizeGlobPatterns($include, false);
+        $exclude = self::normalizeGlobPatterns($exclude, false);
+        $excludeFolders = self::normalizeGlobPatterns($excludeFolders, true);
+
         $dirIt = new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS);
-        self::globPatterns($exclude);
-        self::globPatterns($include);
-        self::globPatterns($excludeFolders);
 
         $filter = new \RecursiveCallbackFilterIterator(
             $dirIt,
             function (\SplFileInfo $current) use ($root, $excludeFolders) {
                 $rel = self::relPath($current->getPathname(), $root);
+
                 if ($current->isDir()) {
                     return !self::isExcluded($rel, $excludeFolders);
                 }
+
                 return true;
             }
         );
@@ -107,7 +117,9 @@ final class Fs
 
         foreach ($it as $fileInfo) {
             if (!$fileInfo->isFile()) continue;
+
             $rel = self::relPath($fileInfo->getPathname(), $root);
+
             if (!empty($exclude) && self::isExcluded($rel, $exclude)) continue;
             if (!empty($include) && !self::isIncluded($rel, $include)) continue;
 
@@ -143,25 +155,53 @@ final class Fs
         return false;
     }
 
-    private static function globPatterns(&$patterns){
-        foreach ($patterns as $key => &$pattern) {
-            $pattern = str_replace('\\', '/', $pattern);
-            $pattern = str_replace(['.','/'], ['\.','\/'], ltrim($pattern, '/'));
-            $ar_replace = [
-                '**' => '\1',
-                '*' => '[^\/]*',
-                '\1' => '.*'
-            ]; // Выделены в последовательную замену, так как друг с другом несовместимы в групповой замене
-            foreach ($ar_replace as $search => $replace) {
-                $pattern = str_replace($search, $replace, $pattern);
+    private static function normalizeGlobPatterns(array $patterns, bool $folders = false): array
+    {
+        $out = [];
+
+        foreach ($patterns as $pattern) {
+            $pattern = trim(str_replace('\\', '/', (string)$pattern));
+            $pattern = trim($pattern, '/');
+
+            if ($pattern === '') {
+                continue;
+            }
+
+            $out[] = $pattern;
+
+            // Для папок простая запись vendor/node_modules/upload
+            // должна срабатывать на любом уровне вложенности.
+            if ($folders && !str_contains($pattern, '/') && !str_contains($pattern, '*')) {
+                $out[] = '**/' . $pattern;
+                $out[] = $pattern . '/**';
+                $out[] = '**/' . $pattern . '/**';
             }
         }
+
+        return array_values(array_unique($out));
     }
 
     private static function matchGlob(string $rel, string $pattern): bool
     {
-        $rel = str_replace('\\', '/', $rel);
-        $regex = '/^' . $pattern . '$/u';
-        return (bool)preg_match($regex, $rel);
+        $rel = trim(str_replace('\\', '/', $rel), '/');
+        $pattern = trim(str_replace('\\', '/', $pattern), '/');
+
+        if ($pattern === '') {
+            return false;
+        }
+
+        $regex = preg_quote($pattern, '~');
+
+        // **/vendor => vendor или any/path/vendor
+        $regex = str_replace('\*\*/', '(?:.*/)?', $regex);
+
+        // vendor/** => vendor или vendor/any/path
+        $regex = str_replace('/\*\*', '(?:/.*)?', $regex);
+
+        // Остаточные ** и обычные *
+        $regex = str_replace('\*\*', '.*', $regex);
+        $regex = str_replace('\*', '[^/]*', $regex);
+
+        return (bool)preg_match('~^' . $regex . '$~u', $rel);
     }
 }

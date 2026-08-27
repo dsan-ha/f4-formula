@@ -11,7 +11,11 @@ $assets->addCss('/ui/css/d/pure.css');
 $assets->addCss('/ui/css/d/base.css');
 $assets->addCss('/ui/css/d/code.css');
 $assets->addCss('/ui/css/style.css');
+
 $assets->addJs('/ui/js/d/jquery-3.4.1.min.js');
+$assets->addJs('/ui/js/d/ractive.min.js');
+$assets->addJs('/ui/js/d/core/app.core.js');
+$assets->addJs('/ui/js/d/core/app.component.js');
 $assets->addJs('/ui/js/main.js');?>
 <!DOCTYPE html>
 <html lang="ru">

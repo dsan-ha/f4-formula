@@ -30,10 +30,12 @@ final class ModuleInstaller
         foreach ($modules as $slug => &$m) {
             if (empty($m['active'])) continue;
 
-            $needInstall = !$this->isInstalled($m);
+            $updatePermanent = $this->isUpdatePermanent($m);
+            $needInstall = $updatePermanent || !$this->isInstalled($m);
+
             if (!$needInstall) continue;
 
-            $this->installOne($m);
+            $this->installOne($m, $updatePermanent);
 
             // отмечаем установку
             $this->setInstalledFlag($m, true);
@@ -46,7 +48,7 @@ final class ModuleInstaller
     /**
      * @param array<string,mixed> $m
      */
-    private function installOne(array $m): void
+    private function installOne(array $m, bool $updatePermanent = false): void
     {
         $base = rtrim((string)($m['base_path'] ?? ''), '/\\');
         if ($base === '' || !is_dir($base)) {
@@ -57,12 +59,18 @@ final class ModuleInstaller
         $uiSrc = $base . '/install/ui';
         $uiDst = rtrim(SITE_ROOT, '/\\') . '/ui';
 
-        if(is_dir($uiSrc)){
-            $backupDir =  $this->backupDir . '/' . (string)($m['slug'] ?? 'unknown') . '/' . date('Ymd_His');
-            $res = Fs::mirror($uiSrc, $uiDst, [
-                'overwrite' => false,
-                'backup_dir' => $backupDir,
-            ]);
+        if (is_dir($uiSrc)) {
+            $mirrorOptions = [
+                'overwrite' => true,
+            ];
+
+            // В режиме постоянного обновления backup бесполезен и быстро засирает tmp
+            if (!$updatePermanent) {
+                $mirrorOptions['backup_dir'] =
+                    $this->backupDir . '/' . (string)($m['slug'] ?? 'unknown') . '/' . date('Ymd_His');
+            }
+
+            $res = Fs::mirror($uiSrc, $uiDst, $mirrorOptions);
 
             // манифест на будущее (для uninstall)
             $this->writeManifest($m, $res['copied']);
@@ -87,6 +95,16 @@ final class ModuleInstaller
         $val = $m['settings']['module']['install'] ?? false;
         if (is_int($val)) return (bool)$val;
         return (bool)$val;
+    }
+
+    private function isUpdatePermanent(array $m): bool
+    {
+        $val = $m['update_permanent']
+            ?? ($m['settings']['module']['update_permanent'] ?? false);
+
+        if (is_int($val)) return (bool)$val;
+
+        return $val === true;
     }
 
     /**

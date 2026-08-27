@@ -17,7 +17,7 @@ abstract class ControllerBase
         $this->csrf = $this->f4->getDI(CsrfTokenManager::class);
     }
 
-    protected function beforeRoute($req, Response $res, array $params): bool 
+    public function beforeRoute($req, Response $res, array $params): bool 
     { 
         return true; //Возвращаем false если есть ошибка
     } 
@@ -35,6 +35,7 @@ abstract class ControllerBase
         if ($this->csrf) {
             $arParams['csrf'] = [
                 'token' => $this->csrf->token(),
+                'field' => $this->csrf->field(),
                 'key' => $this->csrf->getTokenKey()
             ];
             $this->f4->set('_csrf',$arParams['csrf']);
@@ -43,7 +44,7 @@ abstract class ControllerBase
         return $res->withBody($html);  
     }
 
-    protected function afterRoute($req, Response $res, array $params): void 
+    public function afterRoute($req, Response $res, array $params): void 
     {}
 
     protected function p404(Response $res, string $mess='Страница не найдена', string $page = 'include/block404.php'):Response 

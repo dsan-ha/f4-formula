@@ -13,33 +13,122 @@
         emit: function(evt, data) { $bus.trigger(evt, data); }
     };
 
+    class HttpPromise extends Promise {
+        constructor(executor) {
+            super(executor);
+            this._xhr = null;
+        }
 
+        _withXhr(promise) {
+            if (promise && promise instanceof HttpPromise) {
+                promise._xhr = this._xhr;
+            }
+            return promise;
+        }
+
+        then(onFulfilled, onRejected) {
+            return this._withXhr(super.then(onFulfilled, onRejected));
+        }
+
+        catch(onRejected) {
+            return this._withXhr(super.catch(onRejected));
+        }
+
+        finally(onFinally) {
+            return this._withXhr(super.finally(onFinally));
+        }
+
+        done(...callbacks) {
+            callbacks.forEach((callback) => {
+                if (typeof callback !== 'function') return;
+
+                this.then(callback, function() {});
+            });
+
+            return this;
+        }
+
+        fail(...callbacks) {
+            callbacks.forEach((callback) => {
+                if (typeof callback !== 'function') return;
+
+                this.catch(callback);
+            });
+
+            return this;
+        }
+
+        always(...callbacks) {
+            callbacks.forEach((callback) => {
+                if (typeof callback !== 'function') return;
+
+                this.then(
+                    (value) => callback(value),
+                    (error) => callback(error)
+                );
+            });
+
+            return this;
+        }
+
+        abort(statusText) {
+            if (this._xhr && typeof this._xhr.abort === 'function') {
+                this._xhr.abort(statusText);
+            }
+
+            return this;
+        }
+
+        static fromJqXHR(xhr) {
+            const promise = new HttpPromise((resolve, reject) => {
+                xhr.done(function(data) {
+                    resolve(data);
+                });
+
+                xhr.fail(function(jqXHR, textStatus, errorThrown) {
+                    reject(
+                        jqXHR ||
+                        errorThrown ||
+                        new Error(textStatus || 'HTTP request failed')
+                    );
+                });
+            });
+
+            promise._xhr = xhr;
+
+            return promise;
+        }
+    }
 
     // 2) HTTP
     const http = {
         get: function(url, data, opt) {
-            return $.ajax(Object.assign({
+            return HttpPromise.fromJqXHR($.ajax(Object.assign({
                 url,
                 method: 'GET',
                 data,
                 dataType: 'json',
                 cache: false
-            }, opt));
+            }, opt)));
         },
-        post: function(url, data, opt = {json:true}) {
-          const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
-          const sendJSON = opt.json === true; // явный флаг
 
-          return $.ajax(Object.assign({
-            url,
-            method: 'POST',
-            dataType: 'json',
-            processData: isForm ? false : !sendJSON,
-            contentType: isForm ? false :
-              (sendJSON ? 'application/json; charset=utf-8'
+        post: function(url, data, opt = {json:true}) {
+            const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
+            const sendJSON = opt.json === true;
+
+            return HttpPromise.fromJqXHR($.ajax(Object.assign({
+                url,
+                method: 'POST',
+                dataType: 'json',
+                processData: isForm ? false : !sendJSON,
+                contentType: isForm ? false :
+                    (sendJSON
+                        ? 'application/json; charset=utf-8'
                         : 'application/x-www-form-urlencoded; charset=UTF-8'),
-            data: isForm ? data : (sendJSON ? JSON.stringify(data || {}) : (data || {}))
-          }, opt));
+                data: isForm
+                    ? data
+                    : (sendJSON ? JSON.stringify(data || {}) : (data || {}))
+            }, opt)));
         },
         // удобные хелперы
         put: function(url, data, opt) { 
@@ -126,6 +215,88 @@
 
         throw new Error("Unable to copy obj! Its type isn't supported.");
     };
+
+    // 4a) Реестр Ractive-компонентов для вложенных компонентов шаблонов.
+    // Это НЕ инстансы App.components, а именно классы/конструкторы Ractive.extend,
+    // которые потом резолвятся в options.components конкретного child Ractive.
+    const ractiveComponents = {
+        _list: Object.create(null),
+
+        register(name, component) {
+            name = String(name || '').trim();
+            if (!name) {
+                console.error('[App.core.ractiveComponents] empty component name');
+                return null;
+            }
+            if (!component) {
+                console.error('[App.core.ractiveComponents] empty component for', name);
+                return null;
+            }
+            this._list[name] = component;
+            return component;
+        },
+
+        has(name) {
+            return !!this._list[String(name || '').trim()];
+        },
+
+        get(name) {
+            name = String(name || '').trim();
+            return this._list[name] || null;
+        },
+
+        resolve(spec) {
+            const out = {};
+            const self = this;
+
+            function add(alias, value) {
+                alias = String(alias || '').trim();
+                if (!alias) return;
+
+                let component = value;
+
+                if (typeof value === 'string') {
+                    component = self.get(value);
+                } else if (!value || value === true) {
+                    component = self.get(alias);
+                }
+
+                if (!component) {
+                    console.error('[App.core.ractiveComponents] component not found:', alias, value);
+                    return;
+                }
+
+                out[alias] = component;
+            }
+
+            if (!spec) return out;
+
+            if (Array.isArray(spec)) {
+                spec.forEach(function (name) {
+                    add(name, name);
+                });
+                return out;
+            }
+
+            if (typeof spec === 'string') {
+                add(spec, spec);
+                return out;
+            }
+
+            if (typeof spec === 'object') {
+                Object.keys(spec).forEach(function (alias) {
+                    add(alias, spec[alias]);
+                });
+            }
+
+            return out;
+        },
+
+        all() {
+            return this._list;
+        }
+    };
+
     // 4) Реестр компонентов и общая шина действий
     const components = {
         _list: Object.create(null),
@@ -151,6 +322,6 @@
         }
     };
     // 5) Экспорт ядра
-    ns.core = { bus, http, store, components };
+    ns.core = { bus, http, store, components, ractiveComponents };
 
 })(window.App = window.App || {}, jQuery);

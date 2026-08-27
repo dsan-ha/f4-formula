@@ -24,18 +24,167 @@
     return true;
   };
 
+  function isNativeEventLike(value) {
+    if (!value || typeof value !== 'object') return false;
+
+    if (typeof Event !== 'undefined' && value instanceof Event) {
+      return true;
+    }
+
+    const hasType =
+      typeof value.type === 'string';
+
+    const hasTarget =
+      !!(value.target || value.currentTarget || value.srcElement);
+
+    const hasEventApi =
+      typeof value.preventDefault === 'function' ||
+      typeof value.stopPropagation === 'function';
+
+    return hasType && hasTarget && hasEventApi;
+  }
+
+
+  function getNativeEvent(value) {
+    if (isNativeEventLike(value)) return value;
+    if (value && isNativeEventLike(value.original)) return value.original;
+    if (value && isNativeEventLike(value.originalEvent)) return value.originalEvent;
+    if (value && isNativeEventLike(value.event)) return value.event;
+    if (value && isNativeEventLike(value.domEvent)) return value.domEvent;
+    return null;
+  }
+
+  function isRactiveContext(value) {
+    if (!value || typeof value !== 'object') return false;
+    if (isNativeEventLike(value)) return false;
+
+    return !!(
+      value.node ||
+      value.component ||
+      value.keypath !== undefined ||
+      value.index !== undefined ||
+      value.name !== undefined ||
+      value.context !== undefined ||
+      value.event ||
+      value.original ||
+      value.originalEvent ||
+      value.domEvent
+    );
+  }
+
+  function mergeEventContext(ctx, event, payload) {
+    const out = (ctx && typeof ctx === 'object' && !isNativeEventLike(ctx)) ? ctx : {};
+    const e = getNativeEvent(event) || getNativeEvent(ctx);
+
+    if (e) {
+      out.event = e;
+      out.original = e;
+      out.originalEvent = e;
+      out.domEvent = e;
+
+      if (!out.node) out.node = e.currentTarget || e.target || null;
+      if (!out.target) out.target = e.target || null;
+
+      if (!out.preventDefault) {
+        out.preventDefault = function () {
+          if (e.preventDefault) e.preventDefault();
+        };
+      }
+
+      if (!out.stopPropagation) {
+        out.stopPropagation = function () {
+          if (e.stopPropagation) e.stopPropagation();
+        };
+      }
+    }
+
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload) &&
+      !isNativeEventLike(payload)
+    ) {
+      out.payload = payload;
+
+      Object.keys(payload).forEach(function (key) {
+        if (!(key in out)) out[key] = payload[key];
+      });
+    }
+
+    return out;
+  }
+
+  function normalizeRactiveEventArgs(argsLike) {
+    const args = Array.prototype.slice.call(argsLike || []);
+
+    if (!args.length) {
+      return [{}];
+    }
+
+    const first = args[0];
+    const second = args[1];
+
+    // Нормальный новый формат:
+    // @this.fire('name', @context, @event, arg1, arg2)
+    if (isRactiveContext(first)) {
+      const e = getNativeEvent(second);
+
+      if (e) {
+        return [
+          mergeEventContext(first, e),
+          ...args.slice(2)
+        ];
+      }
+
+      return [
+        mergeEventContext(first, null, second),
+        ...args.slice(1)
+      ];
+    }
+
+    // Старый формат:
+    // @this.fire('name', event, arg1)
+    const e = getNativeEvent(first);
+    if (e) {
+      return [
+        mergeEventContext({}, e),
+        ...args.slice(1)
+      ];
+    }
+
+    // Payload-only:
+    // @this.fire('name', {id: id})
+    return [
+      mergeEventContext({}, null, first),
+      ...args
+    ];
+  }
+
   function wrapOnHandlers(ractive, map) {
     const out = {};
-    Object.keys(map).forEach((name) => {
+
+    Object.keys(map || {}).forEach(function (name) {
       const fn = map[name];
       if (typeof fn !== 'function') return;
 
-      // гарантируем, что this внутри fn = ractive
-      out[name] = function (...args) {
-        return fn.apply(ractive, args);
+      out[name] = function () {
+        return fn.apply(ractive, normalizeRactiveEventArgs(arguments));
       };
     });
+
     return out;
+  }
+
+  function bindRactiveEvents(ractive, map) {
+    const wrapped = wrapOnHandlers(ractive, map || {});
+    const handles = [];
+
+    Object.keys(wrapped).forEach(function (name) {
+      const handle = ractive.on(name, wrapped[name]);
+      if (handle) handles.push(handle);
+    });
+
+    return handles;
   }
   
   const assignAt = (obj, path, value) => {
@@ -52,12 +201,57 @@
   };
   const startsWithPath = (k, prefix) => k === prefix || k.startsWith(prefix + '.');
 
+
+  function shallowMergeObjects() {
+    const out = {};
+    Array.prototype.slice.call(arguments).forEach(function (src) {
+      if (!src || typeof src !== 'object' || Array.isArray(src)) return;
+      Object.keys(src).forEach(function (k) {
+        out[k] = src[k];
+      });
+    });
+    return out;
+  }
+
+  function resolveRactiveComponents() {
+    const registry = ns.core && ns.core.ractiveComponents;
+    const out = {};
+
+    function addMap(map) {
+      if (!map) return;
+
+      if (registry && typeof registry.resolve === 'function') {
+        const resolved = registry.resolve(map);
+        Object.keys(resolved).forEach(function (k) {
+          out[k] = resolved[k];
+        });
+        return;
+      }
+
+      if (typeof map === 'string') return;
+      if (Array.isArray(map)) return;
+
+      if (typeof map === 'object') {
+        Object.keys(map).forEach(function (k) {
+          if (map[k]) out[k] = map[k];
+        });
+      }
+    }
+
+    Array.prototype.slice.call(arguments).forEach(addMap);
+    return out;
+  }
+
+
   function defineComponent(spec) {
     const normalized = deepMerge({
       name: 'Anon',
-      rData: [], // rData: [{ code?, el, template, keys?, on?, options? }]
+      rData: [], // rData: [{ code?, el, template, keys?, on?, options?, components? }]
       state: {},
+      objects: {}, // долгоживущие сервисы компонента; objs остаётся DOM-реестром
       computed: {},
+      components: {}, // Ractive child components: object/array/string, resolved through App.core.ractiveComponents
+      ractiveComponents: {}, // alias for components, kept for clarity
       events: {},   // события будут навешаны на каждый child
       options: {},  // общие опции для каждого child Ractive
       hooks: { beforeInit(){}, afterInit(){}, beforeDestroy(){}, afterDestroy(){} },
@@ -67,10 +261,27 @@
 
     function create(props) {
       const cfg = deepMerge(normalized, props || {});
+      if (props && Object.prototype.hasOwnProperty.call(props, 'rData')) {
+        cfg.rData = props.rData;
+      }
       const baseState = $.extend(true, {}, cfg.state, props && props.state);
 
       // реактивный контейнер без рендера
       const rState = new Ractive({ template: '', data: baseState, computed: cfg.computed });
+
+      // Сервисные объекты создаются до дочерних Ractive-компонентов.
+      const objects = {};
+      Object.keys(cfg.objects || {}).forEach(function (code) {
+        const factory = cfg.objects[code];
+        objects[code] = typeof factory === 'function'
+          ? factory({ state: rState, bus, store, http, objects })
+          : factory;
+      });
+
+      rState.r_objects = objects;
+      rState.getObject = function (code) {
+        return objects[code] || null;
+      };
 
       // wires
       const busUnsubs = [];
@@ -82,6 +293,7 @@
       const objs = {};  // code -> $(el)
       const unlinks = [];
 
+      cfg.hooks.beforeInit.call(rState, { bus, store, http, r, objs, objects });
 
       const actions = {};
       Object.keys(cfg.actions || {}).forEach(k => {
@@ -96,7 +308,6 @@
         const { code, el, template, options = {} } = item;
         const onCfg = cfg.on;
         const userOninit = options.oninit;
-        delete cfg.on;
         let rawKeys = item.keys; // может быть строкой или массивом
 
         if (!el || !template) { console.error('[component] rData: нужен el и template', item); return; }
@@ -137,6 +348,11 @@
         initialData['r_actions'] = actions;
 
         options.oninit = function (...args) {
+          this.r_objects = objects;
+          this.getObject = function (objectCode) {
+            return objects[objectCode] || null;
+          };
+
           // достаём обработчики: только для этого code
           const scoped = (onCfg && code && onCfg[code]) ? onCfg[code] : null;
 
@@ -152,11 +368,28 @@
           }
         };
 
-        const child = new Ractive(Object.assign({ el: $el[0], template, data: initialData }, options));
+        const resolvedChildComponents = resolveRactiveComponents(
+          cfg.components,
+          cfg.ractiveComponents,
+          item.components,
+          item.ractiveComponents,
+          options.components
+        );
+
+        const childOptions = Object.assign({}, options);
+        if (Object.keys(resolvedChildComponents).length) {
+          childOptions.components = resolvedChildComponents;
+        }
+
+        const child = new Ractive(Object.assign({ el: $el[0], template, data: initialData }, childOptions));
         
-        // навесим события: общие + локальные
-        const bindEvents = (inst, map) => Object.keys(map || {}).forEach(evt => inst.on(evt, map[evt]));
-        bindEvents(child, cfg.events);
+        // навесим события компонента через общий нормализатор Ractive 1.3.x
+        const eventHandles = bindRactiveEvents(child, cfg.events);
+        unlinks.push(() => {
+          eventHandles.forEach((h) => {
+            if (h && typeof h.cancel === 'function') h.cancel();
+          });
+        });
 
         // двусторонняя синхронизация
         let guardParent = false, guardChild = false;
@@ -216,22 +449,29 @@
         unlinks.push(() => uChild.cancel());
       });
 
-      cfg.hooks.afterInit.call(rState, { bus, store, http, r, objs });
+      cfg.hooks.afterInit.call(rState, { bus, store, http, r, objs, objects });
 
       const api = {
         name: cfg.name,
-        r, objs, state: rState,
+        r, objs, objects, state: rState,
         actions,
+        getObject(code) { return objects[code] || null; },
         setState(patch) { rState.set(patch); },
         getState(path) { return rState.get(path); },
         destroy() {
-          cfg.hooks.beforeDestroy.call(rState, { bus, store, http, r, objs });
+          cfg.hooks.beforeDestroy.call(rState, { bus, store, http, r, objs, objects });
           // снимаем наблюдателей/инстансы
           // unlinks набит выше для каждого child + ветки
           unlinks.forEach(fn => fn && fn());
           Object.keys(r).forEach(code => r[code].teardown());
           busUnsubs.forEach(u => u && u());
           storeUnsubs.forEach(u => u && u());
+          Object.keys(objects).forEach(function (code) {
+            const object = objects[code];
+            if (object && typeof object.destroy === 'function') {
+              object.destroy();
+            }
+          });
           rState.teardown();
           cfg.hooks.afterDestroy.call(null);
         }

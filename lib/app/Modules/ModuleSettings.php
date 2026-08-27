@@ -10,6 +10,7 @@ final class ModuleSettings
     public string $namespace;
     public bool $active;
     public bool $install = false;
+    public bool $update_permanent = false;
     public int $priority = 50;
     public string $include = 'include.php';
     public array $raw = [];
@@ -47,6 +48,14 @@ final class ModuleSettings
         if (!is_bool($install)) {
             throw ModuleConfigException::invalid($settingsPath, "module.install must be boolean.");
         }
+        $updatePermanent = $m['update_permanent'] ?? false;
+        if (is_int($updatePermanent)) $updatePermanent = (bool)$updatePermanent;
+        if (!is_bool($updatePermanent)) {
+            throw ModuleConfigException::invalid($settingsPath, "module.update_permanent must be boolean.");
+        }
+
+        // чтобы в raw-настройках всегда был дефолт
+        $yaml['module']['update_permanent'] = $updatePermanent;
 
         $s = new self();
         $s->name = $m['name'];
@@ -55,6 +64,7 @@ final class ModuleSettings
         $s->namespace = $m['namespace'];
         $s->include = 'include.php';
         $s->install = $install;
+        $s->update_permanent = $updatePermanent;
         $s->raw = $yaml;
 
         return $s;

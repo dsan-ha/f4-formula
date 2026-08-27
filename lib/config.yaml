@@ -4,7 +4,7 @@ UI: "ui/"
 DI_AUTOWIRING: true
 HIGHLIGHT: true
 db:
-  dsn: mysql:host=mysql-5.7;port=3306;dbname=fff_skeleton
+  dsn: mysql:host=mysql-8.4;port=3306;dbname=fff_skeleton
   login: root
   pass: root
 cache:
@@ -17,4 +17,11 @@ cache:
 log:
   log_folder: 'lib/tmp/log/'
   json_log: 'lib/tmp/log/json_sus.log'
-migrator_secret: ""
+admin_guard:
+  session_salt: b10fcb05d4aad9c4957_5MDEyMzQ1Ng
+  password: 'root'
+  attempt_day_limit: 10
+  attempt_month_limit: 30
+  day_block_ttl: 86400
+  month_block_ttl: 2592000
+  session_ttl: 43200
