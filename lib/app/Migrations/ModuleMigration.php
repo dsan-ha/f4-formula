@@ -3,6 +3,7 @@ namespace App\Migrations;
 
 use Phinx\Migration\AbstractMigration;
 use App\F4;
+use App\Base\Kernel;
 use App\Service\DB\SQL;
 
 abstract class ModuleMigration extends AbstractMigration
@@ -14,7 +15,7 @@ abstract class ModuleMigration extends AbstractMigration
 
     protected function f4(): F4
     {
-        return $this->f4 ??= F4::instance();
+        return $this->f4 ??= Kernel::instance()->f4();
     }
 
     protected function db(): SQL
@@ -22,7 +23,7 @@ abstract class ModuleMigration extends AbstractMigration
         if ($this->db) return $this->db;
 
         /** @var SQL $db */
-        $db = $this->f4()->getDI(SQL::class);
+        $db = Kernel::instance()->get(SQL::class);
         return $this->db = $db;
     }
 

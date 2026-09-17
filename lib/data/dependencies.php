@@ -1,71 +1,7 @@
 <?php if(!defined('SITE_ROOT')) exit();
-use App\Service;
-use App\Utils\Cache\FileCacheAdapter;
-use App\Base\ServiceLocator;
-use App\Modules\ModuleRegistry;
-use App\Modules\ModuleAutoloader;
-use Symfony\Component\Yaml\Yaml;
-use DI\ContainerBuilder;
-use function DI\value;
 
-$sl = new ServiceLocator();
-$f4 = App\F4::instance();
-
-// Загружаем все определения
-$definitions = [];
-
-$moduleAutoloader = new ModuleAutoloader();
-$moduleRegistry   = new ModuleRegistry($f4, $moduleAutoloader);
-$moduleRegistry->bootstrap();
-
-$paths = [
-    'lib/data',   // ядро
-    'local/data', // локальные переопределения
-];
-
-$files = ['services.yaml', '.definitions.php']; //файлы с зависимостями
-
-foreach ($paths as $dir) {
-    foreach ($files as $fileName) {
-        $fullPath = SITE_ROOT . "{$dir}/{$fileName}";
-        if (!file_exists($fullPath)) {
-            continue;
-        }
-
-        $ext = pathinfo($fullPath, PATHINFO_EXTENSION);
-
-        if ($ext === 'yaml' || $ext === 'yml') {
-            $yaml = Yaml::parseFile($fullPath);
-            if (!empty($yaml['services'])) {
-                $sl->addDefinitions($yaml['services']);
-            }
-        } elseif ($ext === 'php') {
-            $definitions = require $fullPath;
-            if (is_array($definitions)) {
-                $sl->addDefinitions($definitions);
-            }
-        }
-    }
-}
-// зависимости модулей до сборки контейнера
-$moduleRegistry->addDefinitionsTo($sl);
-$sl->addDefinitions([
-    ModuleRegistry::class   => value($moduleRegistry),
-    ModuleAutoloader::class => value($moduleAutoloader),
-]);
-
-$containerBuilder = new ContainerBuilder();
-
-
-$sl = $sl->useAutowiring($f4->get('DI_AUTOWIRING'))
-    ->initContainer($containerBuilder);
-$f4->set('CONTAINER',$sl);
-
-$f4->init();
-
-//Подключаем модульные bootstrap-файлы после init
-$moduleRegistry->loadBootstrapFiles([
-    'constants.php',
-    'schedule.php',
-    'routes.php',
-]);
+/**
+ * @deprecated Bootstrap/DI container are owned by App\\Base\\Kernel.
+ * Kept so legacy DataLoader::loadOrdered() does not start a second container.
+ */
+\App\Base\Kernel::instance();

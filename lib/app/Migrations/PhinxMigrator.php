@@ -16,14 +16,17 @@ class PhinxMigrator
     protected F4 $f4;
     protected PhinxApplication $phinxApp;
 
-    public function __construct(?string $configPath = null, ?string $snapshotDir = null)
+    public function __construct(?string $configPath = null, ?string $snapshotDir = null, ?F4 $f4 = null)
     {
+        if (!$f4) {
+            throw new \LogicException('Implicit F4 lookup was removed. Resolve PhinxMigrator from PHP-DI, or pass App\\F4 as the 3rd constructor argument.');
+        }
         $root = defined('SITE_ROOT')
             ? rtrim((string) SITE_ROOT, '/\\')
             : dirname(__DIR__, 3);
 
         $this->configPath = $configPath ?: $root . '/lib/phinx.php';
-        $this->f4 = F4::instance();
+        $this->f4 = $f4;
         $dir = $this->f4->g('migrator_snapshot_dir', 'local/tmp/migrator/snapshots');
         $this->snapshotDir = $snapshotDir ?: $root . '/'. trim($dir,'\\/');
 

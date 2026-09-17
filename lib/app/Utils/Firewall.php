@@ -19,6 +19,7 @@ class Firewall
 
     protected CacheInterface $cache;
     protected string $ip;
+    protected F4 $f4;
 
     /** Максимальная длина тела запроса */
     protected const MAX_BODY_LENGTH = 65536;
@@ -39,9 +40,12 @@ class Firewall
     protected const DOS_MAX_HITS = 10;
     protected const DOS_INTERVAL = 3; // секунд
 
-    public function __construct()
+    public function __construct(?F4 $f4 = null)
     {
-        $f4 = F4::instance();
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Inject App\\F4 through PHP-DI or pass it to the constructor.');
+        }
+        $this->f4 = $f4;
         //$adapter = new ApcCacheAdapter(); //Не включен
         $adapter = new FileCacheAdapter(); // Лучше не использовать медленный и опасный при больших нагрузках
         $this->cache = new \App\Utils\Cache($adapter);
@@ -90,7 +94,7 @@ class Firewall
     /** Проверка сигнатуры Telegram */
     public function checkTelegramSignature(): bool
     {
-        $f4 = F3::instance();
+        $f4 = $this->f4;
         $telegram_secret = $f4->g('firewall.telegram_secret',self::TELEGRAM_TOKEN_SECRET);
         $signature_interval = $f4->g('firewall.signature_interval',self::SIGNATURE_INTERVAL);
         $signature_fail_limit = $f4->g('firewall.signature_fail_limit',self::SIGNATURE_FAIL_LIMIT);
@@ -130,7 +134,7 @@ class Firewall
     {
         $curTime = time();
         $totalInPastRange = 0;
-        $f4 = F3::instance();
+        $f4 = $this->f4;
         $rate_limit = $f4->g('firewall.rate_limit',self::RATE_LIMIT);
         $rate_interval = $f4->g('firewall.rate_interval',self::RATE_INTERVAL);
         
@@ -150,7 +154,7 @@ class Firewall
     {
         $curTime = time();
         $entries = [];
-        $f4 = F3::instance();
+        $f4 = $this->f4;
         $dos_interval = $f4->g('firewall.dos_max_hits',self::DOS_INTERVAL);
         $dos_max_hits = $f4->g('firewall.dos_max_hits',self::DOS_MAX_HITS);
 
@@ -197,7 +201,7 @@ class Firewall
             $referer = substr($_SERVER['HTTP_REFERER'] ?? '', 0, 100);
 
             $banManager->banIp($this->ip, $banManager::STATUS_TEMP_HOUR);
-            $logFile = $f4->get('log.firewall_log');
+            $logFile = $this->f4->get('log.firewall_log');
             if($logFile){
                 $txt = sprintf(
                     "Firewall block from IP %s: Reason: %s\n cookie: %s\n agent: %s\n uri: %s\n referer: %s\n\n",
@@ -208,7 +212,7 @@ class Firewall
                     $uri,
                     $referer
                 );
-                Log::writeIn($logFile, $txt, LogLevel::ERROR);
+                Log::writeIn($logFile, $txt, LogLevel::ERROR, '', $this->f4);
             }
         }
 

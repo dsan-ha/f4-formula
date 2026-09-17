@@ -4,24 +4,54 @@ namespace App\Component;
 
 use App\F4;
 use App\Utils\Assets;
+use App\View\CacheHelper;
+use App\Base\RuntimeFactoryInterface;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\Yaml\Exception\ParseException;
 
-abstract class BaseComponent {
+abstract class BaseComponent implements RuntimeFactoryInterface {
     protected F4 $f4;
     protected Assets $assets;
+    protected CacheHelper $cacheHelper;
     protected string $folder;
     protected string $templateName;
     protected array $arParams = [];
     protected array $arResult = [];
 
-    public function __construct(F4 $f4, Assets $assets, string $templateName, string $folder, array $arParams = [])
+    /** @param array<string,mixed> $context */
+    final public function setFactoryContext(array $context): void
     {
-        $this->f4 = $f4;
-        $this->assets = $assets;
-        $this->templateName = $templateName;
-        $this->folder = $folder;
-        $this->arParams = $arParams;
+        $this->f4 = $this->requireContext($context, 'f4', F4::class);
+        $this->assets = $this->requireContext($context, 'assets', Assets::class);
+        $this->cacheHelper = $this->requireContext($context, 'cacheHelper', CacheHelper::class);
+        $this->templateName = (string)$this->requireContextValue($context, 'templateName');
+        $this->folder = (string)$this->requireContextValue($context, 'folder');
+
+        $params = $context['arParams'] ?? [];
+        if (!is_array($params)) {
+            throw new \RuntimeException(static::class . ' factory context arParams must be array.');
+        }
+        $this->arParams = $params;
+    }
+
+    private function requireContext(array $context, string $key, string $class): object
+    {
+        $value = $this->requireContextValue($context, $key);
+        if (!$value instanceof $class) {
+            throw new \RuntimeException(sprintf(
+                '%s factory context "%s" must be instance of %s.',
+                static::class, $key, $class
+            ));
+        }
+        return $value;
+    }
+
+    private function requireContextValue(array $context, string $key): mixed
+    {
+        if (!array_key_exists($key, $context)) {
+            throw new \RuntimeException(static::class . ' missing factory context key: ' . $key);
+        }
+        return $context[$key];
     }
 
     // Метод для переопределения: логика компонента
@@ -32,9 +62,9 @@ abstract class BaseComponent {
         $stylePath = $this->getUIPath($this->folder.'style.css', true);
         $scriptPath = $this->getUIPath($this->folder.'script.js', true);
         if(!empty($stylePath))
-            $assets->addCss($stylePath);
+            $assets->addCss($stylePath,['priority' => 30]);
         if(!empty($scriptPath))
-            $assets->addJs($scriptPath);
+            $assets->addJs($scriptPath,['priority' => 30]);
     }
 
     public function getDefaultParams($params_format = true): array
@@ -77,7 +107,7 @@ abstract class BaseComponent {
         $template->set('templateName',$this->templateName);
         $template->set('component',$this);
 
-        $helper = $this->f4->getDI(\App\View\CacheHelper::class) ?? null;
+        $helper = $this->cacheHelper;
 
         $renderer = function() use ($template, $templatePath, $arParams) {
             $this->runResultModifier($arParams);
@@ -167,3 +197,4 @@ abstract class BaseComponent {
     public function getTemplateName(): string { return $this->templateName; }
     public function getTemplateFolder(): string { return $this->folder; }
 }
+

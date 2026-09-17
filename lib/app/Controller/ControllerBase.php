@@ -11,10 +11,10 @@ abstract class ControllerBase
     protected F4 $f4;
     protected CsrfTokenManager $csrf;
 
-    public function __construct()
+    public function __construct(F4 $f4, CsrfTokenManager $csrf)
     {
-        $this->f4 = F4::instance();
-        $this->csrf = $this->f4->getDI(CsrfTokenManager::class);
+        $this->f4 = $f4;
+        $this->csrf = $csrf;
     }
 
     public function beforeRoute($req, Response $res, array $params): bool 

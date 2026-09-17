@@ -5,18 +5,36 @@ namespace App\Modules\Install;
 
 use App\F4;
 use App\Migrations\PhinxMigrator;
+use App\Base\RuntimeFactoryInterface;
 
-abstract class InstallerBase implements InstallerInterface
+abstract class InstallerBase implements InstallerInterface, RuntimeFactoryInterface
 {
     protected F4 $f4;
 
     /** @var array<string,mixed> */
     protected array $module;
+    protected PhinxMigrator $migrator;
 
-    public function __construct(F4 $f4, array $module)
+    /** @param array<string,mixed> $context */
+    final public function setFactoryContext(array $context): void
     {
+        $f4 = $context['f4'] ?? null;
+        $module = $context['module'] ?? null;
+        $migrator = $context['migrator'] ?? null;
+
+        if (!$f4 instanceof F4) {
+            throw new \RuntimeException(static::class . ' factory context f4 must be App\F4.');
+        }
+        if (!is_array($module)) {
+            throw new \RuntimeException(static::class . ' factory context module must be array.');
+        }
+        if (!$migrator instanceof PhinxMigrator) {
+            throw new \RuntimeException(static::class . ' factory context migrator must be PhinxMigrator.');
+        }
+
         $this->f4 = $f4;
         $this->module = $module;
+        $this->migrator = $migrator;
     }
 
     protected function slug(): string
@@ -41,11 +59,7 @@ abstract class InstallerBase implements InstallerInterface
 
     protected function phinxMigrator(): PhinxMigrator
     {
-        if(!$this->f4->exists('PhinxMigrator', $migrator)) {
-            $migrator = new PhinxMigrator();
-            $this->f4->set('PhinxMigrator', $migrator);
-        } 
-        return $migrator;
+        return $this->migrator;
     }
 
     protected function installModulePhinx(?string $environment = null, bool $runSeeds = false): void

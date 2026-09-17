@@ -3,7 +3,9 @@
 namespace App\Component;
 
 use App\F4;
+use App\Base\ServiceLocator;
 use App\Utils\Assets;
+use App\View\CacheHelper;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -11,13 +13,17 @@ use RecursiveIteratorIterator;
 final class ComponentManager
 {
     protected F4 $f4;
+    protected ServiceLocator $services;
     protected Assets $assets;
+    protected CacheHelper $cacheHelper;
     protected string $uiDir = 'components/';
 
-    public function __construct(F4 $f4, Assets $assets)
+    public function __construct(F4 $f4, ServiceLocator $services, Assets $assets, CacheHelper $cacheHelper)
     {
         $this->f4 = $f4;
+        $this->services = $services;
         $this->assets = $assets;
+        $this->cacheHelper = $cacheHelper;
 
         if (!$this->f4->exists('COMPONENTS', $stack) || !is_array($stack)) {
             $this->f4->set('COMPONENTS', []);
@@ -49,7 +55,17 @@ final class ComponentManager
 
         $templateFolder = $templateRoot . '/' . $template . '/';
 
-        $component = new $className($this->f4, $this->assets, $template, $templateFolder, $params);
+        $component = $this->services->make($className, [
+            'f4' => $this->f4,
+            'assets' => $this->assets,
+            'cacheHelper' => $this->cacheHelper,
+            'templateName' => $template,
+            'folder' => $templateFolder,
+            'arParams' => $params,
+        ]);
+        if (!$component instanceof BaseComponent) {
+            throw new \RuntimeException("Component class must extend BaseComponent: {$className}");
+        }
         $component->execute();
 
         return $component->render();

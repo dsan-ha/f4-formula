@@ -1,28 +1,28 @@
 <?php if(!defined('SITE_ROOT')) exit();
 
-use App\Base\ServiceLocator;
+use App\Base\Kernel;
 
 /**
  * f3_cache - для вызова кэша
 **/
 
 function app(){
-    return \App\F4::instance()->getDI(\App\App::class);
+    return Kernel::instance()->get(\App\App::class);
 }
 function assets(){
-    return \App\F4::instance()->getDI(\App\Utils\Assets::class);
+    return Kernel::instance()->get(\App\Utils\Assets::class);
 }
 function template(){
-    return \App\F4::instance()->getDI(\App\View\Template::class);
+    return Kernel::instance()->get(\App\View\Template::class);
 }
 function app_component(string $componentName, string $componentTemplate, array $arParams = []){
     return app()->component_manager->run($componentName, $componentTemplate, $arParams);
 }
 function ds(){
-    return \App\F4::instance()->getDI(\App\DS::class);
+    return Kernel::instance()->get(\App\DS::class);
 }
 function f3_cache(){
-    return \App\F4::instance()->getDI(App\Utils\Cache::class); //Если не инициализирован кэш то выдаст ошибку
+    return Kernel::instance()->get(App\Utils\Cache::class); //Если не инициализирован кэш то выдаст ошибку
 }
 
 

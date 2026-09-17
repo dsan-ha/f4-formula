@@ -1,12 +1,16 @@
 <?php if(!defined('SITE_ROOT')) exit();
-$f4 = \App\F4::instance();
 
-$f4->schedule(function () {
+use App\Base\Kernel;
+use App\Utils\Scheduler;
+
+/** @var Scheduler $scheduler */
+$scheduler = Kernel::instance()->get(Scheduler::class);
+
+$scheduler->add(function () {
     // Очистка бана
-    //\App\Utils\Firewall::cronCleanup();
-}, '0 * * * *'); // каждый час
+    // Kernel/composition root должен заранее получить нужный сервис и замкнуть его сюда.
+}, '0 * * * *');
 
-$f4->schedule(function () {
+$scheduler->add(function () {
     // Ротация логов
-    //\App\Utils\Log\LogRotator::rotateDirectory();
-}, '0 * * * *'); // каждый час
+}, '0 * * * *');

@@ -247,20 +247,15 @@ final class Environment
 
         $this->rawBody = $readBody ? file_get_contents('php://input') : null;
 
-        $f4 = \App\F4::instance();
         $contentType = $headers['content-type'] ?? ($_SERVER['CONTENT_TYPE'] ?? null);
         if ($readBody && $this->rawBody !== null && stripos((string)$contentType, 'application/json') !== false) {
-            if($f4->get('JSON_SECURE')){
-                $this->body = self::decodeJsonSecure();
-            } else {
-                try {
-                    $this->body = json_decode($this->rawBody, true, 512, JSON_THROW_ON_ERROR);
-                } catch (\JsonException $e) {
-                    // логни $e->getMessage() и кусок $raw, верни 400
-                    exit('Bad body or headers');
-                }
+            // Environment is initialized before application config/DI. It must not reach
+            // back into F4 or the container while capturing the request.
+            try {
+                $this->body = json_decode($this->rawBody, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                throw new \RuntimeException('Invalid JSON request body', 0, $e);
             }
-
         } else {
             $this->body = $this->rawBody;
         }
@@ -453,27 +448,11 @@ final class Environment
 
     private static function logSuspiciousJson(string $raw, string $reason): void
     {
-        try {
-            $f4 = \App\F4::instance();
-            $enabled = (bool)$f4->get('log.json_on');
-            if (!$enabled) return;
-
-            $file = (string)$f4->get('log.json_log');
-            if ($file === '') return;
-
-            $line = json_encode([
-                'time'   => date('c'),
-                'ip'     => $_SERVER['REMOTE_ADDR'] ?? null,
-                'reason' => $reason,
-                'raw'    => $raw,
-            ], JSON_UNESCAPED_UNICODE);
-
-            // простой append
-            @file_put_contents($file, $line . PHP_EOL, FILE_APPEND);
-
-        } catch (\Throwable $e) {
-            // логирование не должно валить запрос
-        }
+        // Environment runs before application config/DI is ready. Do not access F4 here.
+        // Keep only a minimal server log entry; application-level JSON logging belongs
+        // to middleware/services after Kernel boot.
+        @error_log('[Environment JSON] ' . $reason);
     }
 
 }
+

@@ -9,6 +9,7 @@ use App\Service\DB\QueryBuilder;
 use App\Utils\Cache as BaseCache;
 use App\Service\DB\Cache as DBCache;
 use App\Service\Hydrator\HydratorInterface;
+use App\Base\RuntimeFactoryInterface;
 
 /**
  * Абстрактный класс для работы с таблицами через SQL или Mapper (Fat-Free Framework).
@@ -18,7 +19,7 @@ use App\Service\Hydrator\HydratorInterface;
  * - getRaw() — ручной SQL
  * - add(), update(), delete() — работа с DB\SQL\Mapper
  */
-abstract class DataManager {
+abstract class DataManager implements RuntimeFactoryInterface {
     protected SQL $db;
     protected F4 $f4;
     protected DBCache $cache;
@@ -26,19 +27,40 @@ abstract class DataManager {
     protected HydratorInterface $hydrator;
     protected DataManagerProtector $protector;
 
-    /**
-     * @param SQL $db экземпляр базы данных
-     * @param F4 $f4 экземпляр фреймворка
-     */
-    public function __construct(SQL $db, F4 $f4, HydratorInterface $hydrator,BaseCache $cache ) {
+    /** @param array<string,mixed> $context */
+    final public function setFactoryContext(array $context): void
+    {
+        $db = $context['db'] ?? null;
+        $f4 = $context['f4'] ?? null;
+        $hydrator = $context['hydrator'] ?? null;
+        $cache = $context['cache'] ?? null;
+        $protector = $context['protector'] ?? null;
+
+        if (!$db instanceof SQL) {
+            throw new \RuntimeException(static::class . ' factory context db must be SQL.');
+        }
+        if (!$f4 instanceof F4) {
+            throw new \RuntimeException(static::class . ' factory context f4 must be App\F4.');
+        }
+        if (!$hydrator instanceof HydratorInterface) {
+            throw new \RuntimeException(static::class . ' factory context hydrator must implement HydratorInterface.');
+        }
+        if (!$cache instanceof BaseCache) {
+            throw new \RuntimeException(static::class . ' factory context cache must be App\Utils\Cache.');
+        }
+        if (!$protector instanceof DataManagerProtector) {
+            throw new \RuntimeException(static::class . ' factory context protector must be DataManagerProtector.');
+        }
+
         $this->db = $db;
         $this->f4 = $f4;
         $this->hydrator = $hydrator;
         $this->cache = new DBCache($cache);
-        $this->protector = $f4->getDI(DataManagerProtector::class);
+        $this->protector = $protector;
+
         $fieldsMap = static::getFieldsMap();
-        $table     = static::getTableName();
-        $this->qb = new QueryBuilder($db, $table, $fieldsMap, pk: null, hydrator: $this->hydrator);
+        $table = static::getTableName();
+        $this->qb = new QueryBuilder($db, $table, $fieldsMap, pk: null, hydrator: $hydrator);
     }
 
     public function logSQL(){
@@ -370,3 +392,4 @@ abstract class DataManager {
         catch (\Throwable $e) { $this->db->rollback(); throw $e; }
     }
 }
+

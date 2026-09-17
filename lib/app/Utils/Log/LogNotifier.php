@@ -4,20 +4,22 @@ namespace App\Utils\Log;
 
 use App\F4;
 
-//Класс оповещает об ошибках в slack и телеграмм бота
+// Класс оповещает об ошибках в slack и телеграмм бота
 class LogNotifier
 {
-
-    public static function notify(string $message, int $level): void
+    public static function notify(string $message, int $level, ?F4 $f4 = null): void
     {
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 explicitly or call through a DI-managed logger.');
+        }
+
         if ($level < LogLevel::ERROR) {
             return;
         }
 
-        $f4 = F4::instance();
-        $telegramToken = $f4->g('log_notifier.bot_token',null);
-        $telegramChatId = $f4->g('log_notifier.chat_id',null);
-        $slackWebhookUrl = $f4->g('log_notifier.slack_webhook_url',null);
+        $telegramToken = $f4->g('log_notifier.bot_token', null);
+        $telegramChatId = $f4->g('log_notifier.chat_id', null);
+        $slackWebhookUrl = $f4->g('log_notifier.slack_webhook_url', null);
 
         if (!empty($telegramToken) && !empty($telegramChatId)) {
             self::sendToTelegram($message, $telegramToken, $telegramChatId);
@@ -40,26 +42,25 @@ class LogNotifier
         self::httpPost($url, $payload);
     }
 
-    protected function sendToSlack(string $message, string $slackWebhookUrl): void
+    protected static function sendToSlack(string $message, string $slackWebhookUrl): void
     {
-        $payload = ['text' => $message];
-        self::httpPost($slackWebhookUrl, $payload);
+        self::httpPost($slackWebhookUrl, ['text' => $message]);
     }
 
-    protected function httpPost(string $url, array $payload): void
+    protected static function httpPost(string $url, array $payload): void
     {
         try {
             $options = [
                 'http' => [
                     'method' => 'POST',
-                    'header' => "Content-type: application/json",
+                    'header' => 'Content-type: application/json',
                     'content' => json_encode($payload, JSON_UNESCAPED_UNICODE),
                     'timeout' => 2,
                 ]
             ];
             file_get_contents($url, false, stream_context_create($options));
-        } catch (\Exception $e) {
-            // Логгер не должен падать на ошибке уведомления
+        } catch (\Throwable) {
+            // Логгер не должен падать на ошибке уведомления.
         }
     }
 }

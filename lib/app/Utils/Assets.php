@@ -104,7 +104,9 @@ final class Assets
         }
 
         // Сортируем файлы по приоритету
-        asort($this->cssFiles);
+        uasort($this->cssFiles, function ($a, $b) {
+            return $a['priority'] <=> $b['priority'];
+        });
 
         $combinedCss = '';
 
@@ -137,7 +139,7 @@ final class Assets
         uasort($filteredFiles, function ($a, $b) {
             return $a['priority'] <=> $b['priority'];
         });
-
+        var_export($filteredFiles);
         $combinedJs = '';
 
         foreach (array_keys($filteredFiles) as $file) {

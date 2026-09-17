@@ -33,6 +33,11 @@ final class EventManager
         return $id;
     }
 
+    public function event(string $module, string $event, array $parameters = []): Event
+    {
+        return new Event($module, $event, $parameters, $this);
+    }
+
     public function removeEventHandler(string $module, string $event, string $handlerId): bool
     {
         if (empty($this->map[$module][$event])) return false;
@@ -68,4 +73,5 @@ final class EventManager
         return call_user_func_array($cb, $args);
     }
 }
+
 

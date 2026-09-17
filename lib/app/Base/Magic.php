@@ -15,7 +15,7 @@ abstract class Magic implements \ArrayAccess {
 		return $this->exists($key) && $this->get($key)!==NULL;
 	}
 
-	public function offsetGet(mixed $key): mixed {
+	public function offsetGet(mixed $key, mixed $def=''): mixed {
 		$val=$this->get($key);
 		return $val?:$def;
 	}

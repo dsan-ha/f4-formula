@@ -1,8 +1,7 @@
 <?php
 // vendor/bin/phinx create InitTelegramBotSchema
 
-use App\F4;
-$f4 = F4::instance();
+$f4 = f4();
 $dsn  = $f4->g('db.dsn','mysql:host=mysql-8.4;port=3306;dbname=fff_skeleton');
 $ar_dsn = explode(';',$dsn);
 $ar_db = [];
@@ -35,7 +34,7 @@ $migration_config = [
 ];
 
 if(defined('SITE_ROOT')){
-    $f4 = F4::instance();
+    $f4 = f4();
     $modules = (array)$f4->get('MODULES');
 
     $migrationPaths = [

@@ -2,7 +2,7 @@
 
 use App\Utils\Assets;
 
-$f4 = App\F4::instance();
+$f4 = f4();
 $app = app();
 $assets = assets();
 $assets->addCss('/ui/css/d/normalize.min.css');

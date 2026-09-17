@@ -6,6 +6,12 @@ use App\F4;
 
 class Markdown {
 
+	private F4 $f4;
+
+	public function __construct(F4 $f4) {
+		$this->f4 = $f4;
+	}
+
 	protected
 		//! Parsing rules
 		$blocks,
@@ -46,7 +52,7 @@ class Markdown {
 	**/
 	protected function _fence($hint,$str) {
 		$str=$this->snip($str);
-		$fw=F4::instance();
+		$fw=$this->f4;
 		if ($fw->get('HIGHLIGHT')) {
 			switch (strtolower($hint)) {
 				case 'php':
@@ -482,7 +488,7 @@ class Markdown {
 		foreach ($this->special as $key=>$val)
 			$str=preg_replace('/'.preg_quote($key,'/').'/i',$val,$str);
 		return htmlspecialchars($str,ENT_COMPAT,
-			F4::instance()->get('ENCODING'),FALSE);
+			$this->f4->get('ENCODING'),FALSE);
 	}
 
 	/**
@@ -619,3 +625,4 @@ class Markdown {
 		return $this->snip($txt);
 	}
 }
+

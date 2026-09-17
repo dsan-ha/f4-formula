@@ -33,6 +33,8 @@ class SQL {
 		//! SQL log
 		$log;
 
+	protected F4 $f4;
+
 	/**
 	*	Begin SQL transaction
 	*	@return bool
@@ -131,7 +133,7 @@ class SQL {
 	*	@param $stamp bool
 	**/
 	function exec($cmds,$args=NULL,$log=TRUE,$stamp=FALSE) {
-		$fw=F4::instance();
+		$fw=$this->f4;
 		$auto=FALSE;
 		if (is_null($args))
 			$args=[];
@@ -272,7 +274,7 @@ class SQL {
 	*	@param $fields array|string
 	**/
 	function schema($table,$fields=NULL) {
-		$fw=F4::instance();
+		$fw=$this->f4;
 		if (strpos($table,'.'))
 			list($schema,$table)=explode('.',$table);
 		// Supported engines
@@ -396,7 +398,7 @@ class SQL {
 	function quote($val,$type=\PDO::PARAM_STR) {
 		return $this->engine=='odbc'?
 			(is_string($val)?
-				F4::instance()->stringify(str_replace('\'','\'\'',$val)):
+				$this->f4->stringify(str_replace('\'','\'\'',$val)):
 				$val):
 			$this->pdo->quote($val,$type);
 	}
@@ -484,8 +486,12 @@ class SQL {
 	*	@param $pw string
 	*	@param $options array
 	**/
-	function __construct($dsn,$user=NULL,$pw=NULL,?array $options=NULL) {
-		$fw=F4::instance();
+	function __construct($dsn,$user=NULL,$pw=NULL,?array $options=NULL, ?F4 $f4=NULL) {
+		if (!$f4) {
+			throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 as the 5th SQL constructor argument (or add DI\\get(App\\F4::class) to the SQL definition).');
+		}
+		$this->f4 = $f4;
+		$fw=$this->f4;
 		$this->uuid=$fw->hash($this->dsn=$dsn);
 		if (preg_match('/^.+?(?:dbname|database)=(.+?)(?=;|$)/is',$dsn,$parts))
 			$this->dbname=str_replace('\\ ',' ',$parts[1]);
@@ -504,3 +510,4 @@ class SQL {
 	}
 
 }
+

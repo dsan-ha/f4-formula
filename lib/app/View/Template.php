@@ -25,7 +25,7 @@ class Template
      * Конструктор.
      * @param string|string[]|null $uiPaths Путь или массив путей к папке(ам) шаблонов. Как в F4, разделитель — запятая.
      */
-    public function __construct(F4 $f4, CacheHelper $cache, string|array $uiPaths = null)
+    public function __construct(F4 $f4, CacheHelper $cache, string|array $uiPaths)
     {
         $this->f4 = $f4;
         $this->cache = $cache;

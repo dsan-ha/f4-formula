@@ -12,6 +12,8 @@ use App\Http\MiddlewareInterface;
  */
 final class CacheHeadersMiddleware implements MiddlewareInterface
 {
+    public function __construct(private F4 $f4) {}
+
     public function __invoke(Request $req, Response $res, array $params, callable $next): Response
     {
         $res = $next($req, $res, $params);
@@ -20,8 +22,7 @@ final class CacheHeadersMiddleware implements MiddlewareInterface
             return $res;
         }
 
-        $f4 = F4::instance();
-        $ttl = (int)$f4->get('ROUTE_TTL');
+        $ttl = (int)$this->f4->get('ROUTE_TTL');
         $now = time();
 
         $method = $req->getMethod();

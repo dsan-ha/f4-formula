@@ -10,9 +10,11 @@ class MemcachedCacheAdapter implements CacheInterface
     protected string $seed;
     private const META_PREFIX = 'm:';
 
-    public function __construct(string $seed = '')
+    public function __construct(string $seed = '', ?F4 $f4 = null)
     {
-        $f4 = F4::instance();
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 as the second constructor argument or configure the adapter through PHP-DI.');
+        }
         $host = $f4->g('cache.memcached_host','127.0.0.1');
         $port = $f4->g('cache.memcached_port',11211);
         $this->client = new \Memcached();
@@ -81,3 +83,4 @@ class MemcachedCacheAdapter implements CacheInterface
         $this->client->flush();
     }
 }
+

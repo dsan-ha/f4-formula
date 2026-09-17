@@ -14,10 +14,12 @@ use App\F4;
 final class CacheHelper
 {
     private CacheInterface $cache;
+    private F4 $f4;
 
-    public function __construct(CacheInterface $cache)
+    public function __construct(CacheInterface $cache, F4 $f4)
     {
         $this->cache = $cache;
+        $this->f4 = $f4;
     }
 
     /**
@@ -148,7 +150,7 @@ final class CacheHelper
     }
 
     protected function getUIPath($path){
-        $hive = F4::instance()->get('UI');
+        $hive = $this->f4->get('UI');
         $roots = $hive ? explode(',', $hive) : [];
 
         foreach ($roots as $root) {
@@ -161,3 +163,4 @@ final class CacheHelper
         return '';
     }
 }
+

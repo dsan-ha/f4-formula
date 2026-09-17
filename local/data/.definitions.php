@@ -6,15 +6,16 @@ use function DI\autowire;
 use function DI\create;
 use function DI\get;
 
-$f4 = App\F4::instance();
+$f4 = f4();
 $dsn  = $f4->get('db.dsn');
 $user = $f4->get('db.login');
 $pass = $f4->get('db.pass');
 
 return [
-    SQL::class => create(SQL::class)->constructor($dsn, $user, $pass),
+    SQL::class => create(SQL::class)->constructor($dsn, $user, $pass, [], get(\App\F4::class)),
     DataManagerRegistry::class => autowire(DataManagerRegistry::class)
 ];
+
 
 
 

@@ -17,10 +17,14 @@ class Log
     protected const ROTATION = true;
 
     protected ?LogNotifier $notifier = null;
+    protected F4 $f4;
 
-    public function __construct(string $filePath, string $logFolder = '', int $threshold = LogLevel::DEBUG, bool $colorOutput = false, bool $jsonFormat = false)
+    public function __construct(string $filePath, string $logFolder = '', int $threshold = LogLevel::DEBUG, bool $colorOutput = false, bool $jsonFormat = false, ?F4 $f4 = null)
     {
-        $f4 = F4::instance();
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 as the 6th constructor argument or build the logger in a DI-aware factory.');
+        }
+        $this->f4 = $f4;
         if(empty($logFolder))
             $logFolder = $f4->g('log.log_folder',self::LOG_FOLDER);
         $this->basePath = SITE_ROOT.$logFolder.$filePath;
@@ -31,7 +35,7 @@ class Log
 
     public function write(string $message, int $level = LogLevel::INFO): void
     {
-        $f4 = F4::instance();
+        $f4 = $this->f4;
         if ($level < $this->threshold) {
             return;
         }
@@ -47,18 +51,20 @@ class Log
         }
 
         if (self::ROTATION) {
-            LogRotator::rotateFile($this->basePath); 
+            LogRotator::rotateFile($this->basePath, $this->f4); 
         }
 
         $logNotify = $f4->get('log_notifier.notifier_on');
         if ($logNotify) {
-            LogNotifier::notify($message, $level); 
+            LogNotifier::notify($message, $level, $this->f4); 
         }
     }
 
-    public static function writeIn(string $filePath, string $message, int $level = LogLevel::INFO, string $logFolder = ''): void
+    public static function writeIn(string $filePath, string $message, int $level = LogLevel::INFO, string $logFolder = '', ?F4 $f4 = null): void
     {
-        $f4 = F4::instance();
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 as the 5th argument or use a DI-managed logger.');
+        }
         if(empty($logFolder))
             $logFolder = $f4->g('log.log_folder',self::LOG_FOLDER);
         $label = LogLevel::$labels[$level] ?? 'INFO';
@@ -68,12 +74,12 @@ class Log
         file_put_contents($path, $logLine, FILE_APPEND | LOCK_EX);
 
         if (self::ROTATION) {
-            LogRotator::rotateFile($path);
+            LogRotator::rotateFile($path, $f4);
         }
         
         $logNotify = $f4->get('log_notifier.notifier_on');
         if ($logNotify) {
-            LogNotifier::notify($message, $level); 
+            LogNotifier::notify($message, $level, $this->f4); 
         }
     }
 
@@ -137,3 +143,4 @@ class Log
         return $result;
     }
 }
+

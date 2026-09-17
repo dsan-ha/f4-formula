@@ -2,7 +2,7 @@
 
 use App\Controller\Base;
 
-$f4=App\F4::instance();
+$f4=f4();
 
 
 $f4->route('GET /', [Base::class,'index']);

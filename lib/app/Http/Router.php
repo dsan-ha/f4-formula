@@ -8,6 +8,7 @@ use App\Http\Request;
 use App\Http\MiddlewareState;
 use App\Http\MiddlewareCombinator;
 use App\Http\I\RouterInterface;
+use App\Base\ServiceLocator;
 
 class Router implements RouterInterface {
     protected array $groups = [];
@@ -38,11 +39,15 @@ class Router implements RouterInterface {
     private F4 $f4;
     private Request $req;
     private Response $res;
+    private ServiceLocator $services;
+    private ErrorHandler $errorHandler;
 
-    public function __construct(F4 $f4, Request $req, Response $res) {
+    public function __construct(F4 $f4, Request $req, Response $res, ServiceLocator $services, ErrorHandler $errorHandler) {
         $this->f4 = $f4;
         $this->req = $req;
         $this->res = $res;
+        $this->services = $services;
+        $this->errorHandler = $errorHandler;
         $this->globalMiddleware = new MiddlewareDispatcher();
         $base = $f4->get('BASE');
         $uri = $req->getUri();
@@ -164,7 +169,7 @@ class Router implements RouterInterface {
         $uri = $this->f4->get('URI');
         foreach ($this->f4->split($parts[1]) as $verb) {
             if (!preg_match('/'.self::VERBS.'/',$verb))
-                $this->f4->error(501,$verb.' '.$uri);
+                throw new \InvalidArgumentException('Unsupported HTTP verb: '.$verb.' '.$uri);
             $chain = ($ctx)?$ctx->chainPrefix():'';
 
             $route = new Route([
@@ -345,7 +350,29 @@ class Router implements RouterInterface {
     *   Match routes against incoming URI
     *   @return mixed
     **/
-    function run() {
+    public function run() {
+        $bufferLevel = ob_get_level();
+
+        try {
+            if ($this->blacklisted($this->req->clientIp())) {
+                return $this->sendErrorResponse(
+                    $this->errorHandler->http(403, '', $this->res)
+                );
+            }
+
+            return $this->dispatchRequest();
+        } catch (\Throwable $error) {
+            while (ob_get_level() > $bufferLevel) {
+                @ob_end_clean();
+            }
+
+            return $this->sendErrorResponse(
+                $this->errorHandler->handle($error, $this->res)
+            );
+        }
+    }
+
+    private function dispatchRequest() {
         $f4   = $this->f4;
         $req  = $this->req;
         $res  = $this->res;
@@ -505,15 +532,31 @@ class Router implements RouterInterface {
         }
         if (!$allowed){
             // URL doesn't match any route
-            $f4->error(404);
+            return $this->sendErrorResponse(
+                $this->errorHandler->http(404, '', $res)
+            );
         } elseif (!$cli) {
             if (!preg_grep('/Allow:/',$headers_send=headers_list()))
                 // Unhandled HTTP method
                 $res = $res->withHeader('Allow', implode(',', array_unique($allowed)));
-            if ($verb!='OPTIONS')
-                $f4->error(405);
+            if ($verb!='OPTIONS') {
+                return $this->sendErrorResponse(
+                    $this->errorHandler->http(405, '', $res)
+                );
+            }
         }
-        return FALSE;
+        return $res;
+    }
+
+    private function sendErrorResponse(Response $response): Response
+    {
+        $this->res = $response;
+
+        if (!$this->f4->get('QUIET') && !$response->isSent()) {
+            $response->send($this->req->isCli());
+        }
+
+        return $response;
     }
 
     /**
@@ -569,7 +612,7 @@ class Router implements RouterInterface {
             [$target, $method] = $handler;
 
             if (is_string($target)) {
-                $target = $this->f4->resolveFromContainer($target);
+                $target = $this->services->get($target);
             }
 
             // Жизненный цикл: beforeAction → action → afterAction
@@ -600,3 +643,4 @@ class Router implements RouterInterface {
     }
 
 }
+

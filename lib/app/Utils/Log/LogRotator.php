@@ -11,15 +11,17 @@ class LogRotator
     protected const ROTATED_FILES = 5;
     protected const COMPRESS_OLD = false;
 
-    public static function rotateFile(string $file = null): void
+    public static function rotateFile(string $file = null, ?F4 $f4 = null): void
     {
-        $f4 = F4::instance();
-        $maxFileSizeBytes = $f4->g('log_rotate.max_file_size_bytes',self::FILE_SIZE);
-        $last = $f4->g('log_rotate.max_rotated_files',self::ROTATED_FILES);
-        $compressOld = $f4->g('log_rotate.compress_old',self::COMPRESS_OLD);
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 as the second argument or wrap rotation in a DI-managed service.');
+        }
 
+        $maxFileSizeBytes = $f4->g('log_rotate.max_file_size_bytes', self::FILE_SIZE);
+        $last = $f4->g('log_rotate.max_rotated_files', self::ROTATED_FILES);
+        $compressOld = $f4->g('log_rotate.compress_old', self::COMPRESS_OLD);
 
-        if ( !file_exists($file) || filesize($file) < $maxFileSizeBytes) {
+        if (!file_exists($file) || filesize($file) < $maxFileSizeBytes) {
             return;
         }
 
@@ -47,13 +49,17 @@ class LogRotator
         }
     }
 
-    public static function rotateDirectory(string $dir = null): void
+    public static function rotateDirectory(string $dir = null, ?F4 $f4 = null): void
     {
-        $f4 = F4::instance();
-        if(empty($dir))
-            $dir = SITE_ROOT . $f4->g('log.log_folder',self::LOG_FOLDER);
+        if (!$f4) {
+            throw new \LogicException('Implicit global F4 lookup was removed. Pass App\\F4 as the second argument or resolve configuration before calling the rotator.');
+        }
+
+        if (empty($dir)) {
+            $dir = SITE_ROOT . $f4->g('log.log_folder', self::LOG_FOLDER);
+        }
         foreach (glob($dir . '/*.log') as $file) {
-            self::rotateFile($file);
+            self::rotateFile($file, $f4);
         }
     }
 }

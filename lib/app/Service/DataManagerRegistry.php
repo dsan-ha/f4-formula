@@ -8,6 +8,7 @@ use App\Service\DataEntityInterface;
 use App\Service\Hydrator\HydratorInterface;
 use App\Service\Hydrator\MapHydrator;       
 use App\Utils\Cache as BaseCache;       
+use App\Base\ServiceLocator;
 use InvalidArgumentException;
 
 class DataManagerRegistry
@@ -17,12 +18,16 @@ class DataManagerRegistry
     protected SQL $db;
     protected F4 $f4;
     protected BaseCache $cache;
+    protected DataManagerProtector $protector;
+    protected ServiceLocator $services;
 
-    public function __construct(SQL $db, F4 $f4, BaseCache $cache)
+    public function __construct(SQL $db, F4 $f4, BaseCache $cache, DataManagerProtector $protector, ServiceLocator $services)
     {
         $this->db = $db;
         $this->f4 = $f4;
         $this->cache = $cache;
+        $this->protector = $protector;
+        $this->services = $services;
     }
 
     public function setHydrator(string $entityClass, HydratorInterface|callable $hydratorOrFactory): void
@@ -71,7 +76,17 @@ class DataManagerRegistry
     {
         if (!isset($this->managers[$className])) {
             $hydrator = $this->getHydrator($className);
-            $this->managers[$className] = new $className($this->db, $this->f4, $hydrator, $this->cache);
+            $manager = $this->services->make($className, [
+                'db' => $this->db,
+                'f4' => $this->f4,
+                'hydrator' => $hydrator,
+                'cache' => $this->cache,
+                'protector' => $this->protector,
+            ]);
+            if (!$manager instanceof DataManager) {
+                throw new InvalidArgumentException("$className must extend " . DataManager::class);
+            }
+            $this->managers[$className] = $manager;
         }
 
         return $this->managers[$className];
@@ -88,3 +103,4 @@ class DataManagerRegistry
         return $this->managers;
     }
 }
+

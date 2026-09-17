@@ -33,7 +33,6 @@ final class ModuleRegistry
         $this->discoverModules();
         $this->f4->set('MODULES', $this->modules);
         $this->registerAutoload();
-        $this->installMissing();
     }
 
     public function all(): array
@@ -150,10 +149,11 @@ final class ModuleRegistry
         }
     }
 
-    private function installMissing(): void
+    public function installMissing(ModuleInstaller $installer): void
     {
-        $installer = new ModuleInstaller($this->f4);
         $installer->installMissing($this->modules);
+        // Installer может обновить in-memory settings. Публикуем актуальный registry в hive.
+        $this->f4->set('MODULES', $this->modules);
     }
 
     private function discoverModules(): void

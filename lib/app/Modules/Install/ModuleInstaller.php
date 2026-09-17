@@ -3,19 +3,25 @@ declare(strict_types=1);
 
 namespace App\Modules\Install;
 
-use App\F4;
 use App\Utils\Fs;
+use App\Base\ServiceLocator;
+use App\F4;
+use App\Migrations\PhinxMigrator;
 use Symfony\Component\Yaml\Yaml;
 
 final class ModuleInstaller
 {
-    private F4 $f4;
     private string $backupDir;
     private string $dir_manifest;
+    private ServiceLocator $services;
+    private F4 $f4;
+    private PhinxMigrator $migrator;
 
-    public function __construct(F4 $f4)
+    public function __construct(ServiceLocator $services, F4 $f4, PhinxMigrator $migrator)
     {
+        $this->services = $services;
         $this->f4 = $f4;
+        $this->migrator = $migrator;
         $this->backupDir = rtrim(SITE_ROOT, '/\\') . '/local/tmp/modules/.module_backup';
         $this->dir_manifest = rtrim(SITE_ROOT, '/\\') . '/local/tmp/modules/_install_manifest';
         Fs::ensureDir($this->backupDir);
@@ -119,9 +125,9 @@ final class ModuleInstaller
         if (!is_writable($settingsPath)) return;
 
         $yaml = Yaml::parseFile($settingsPath) ?: [];
-        if (!is_array($yaml)) $yaml = [];
+        if (!is_array($yaml)) return;
 
-        if (!isset($yaml['module']) || !is_array($yaml['module'])) $yaml['module'] = [];
+        if (!isset($yaml['module']) || !is_array($yaml['module'])) return;
         $yaml['module']['install'] = $installed;
 
         $dump = Yaml::dump($yaml, 6, 2);
@@ -139,14 +145,15 @@ final class ModuleInstaller
     {
         $ret = require $entry;
 
-        if ($ret instanceof InstallerInterface) {
-            return $ret;
-        }
-
-        if (is_string($ret) && class_exists($ret)) {
-            $obj = new $ret($this->f4, $m);
+        if ($ret instanceof InstallerInterface || (is_string($ret) && class_exists($ret))) {
+            $obj = $this->services->make($ret, [
+                'f4' => $this->f4,
+                'module' => $m,
+                'migrator' => $this->migrator,
+            ]);
             if (!$obj instanceof InstallerInterface) {
-                throw new \RuntimeException("Installer class must implement InstallerInterface: {$ret}");
+                $name = is_object($obj) ? $obj::class : (string)$ret;
+                throw new \RuntimeException("Installer class must implement InstallerInterface: {$name}");
             }
             return $obj;
         }

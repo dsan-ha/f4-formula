@@ -1,5 +1,7 @@
 <?php if(!defined('SITE_ROOT')) exit();
-use App\F4;
-$f4=F4::instance();
 
-define('UPLOAD_DIR',SITE_ROOT.'upload/'); 
+use App\Base\Kernel;
+
+$f4 = Kernel::instance()->f4();
+
+define('UPLOAD_DIR', SITE_ROOT . 'upload/');
