@@ -1,745 +1,559 @@
 # F4-Formula
 
-F4-Formula это прикладной PHP-фреймворк, выросший из идей Fat-Free Framework, но сильно расширенный под реальные проектные задачи: модульную архитектуру, DI, безопасный HTTP-слой, компонентный UI, сервисный слой для данных, миграции, кэширование и удобную схему обновления ядра без поломки боевого кода.
+F4-Formula — прикладной PHP-фреймворк для разработки модульных веб-приложений, внутренних сервисов и крупных сайтов, где важны предсказуемая архитектура, разделение ядра и проектного кода, удобная работа с HTTP, DI, компонентами, данными, миграциями и кэшем.
 
-## Зачем нужен F4-Formula
-
-Обычный микрофреймворк хорош на старте, но быстро начинает упираться в одни и те же проблемы:
-
-- бизнес-код смешивается с ядром
-- сложно обновлять базу проекта без конфликтов
-- роутинг и middleware начинают обрастать хаотично
-- работа с БД превращается в набор разрозненных SQL-хелперов
-- модульные фичи тяжело переносить между проектами
-- кеш, шаблоны, компоненты и миграции живут каждая своей жизнью
-
-F4-Formula решает это через понятное разделение слоёв, предсказуемую структуру и набор уже встроенных инструментов.
+Фреймворк вырос из идей Fat-Free Framework, но развивается как самостоятельная прикладная платформа. Его задача — дать разработчику компактное ядро без лишней магии, при этом закрыть типовые проблемы, которые быстро появляются в реальных проектах: разрастание bootstrap-кода, хаотичный DI, смешивание бизнес-логики с инфраструктурой, ручную работу с HTTP, сложное переиспользование модулей и постоянные конфликты при обновлении общей кодовой базы.
 
 ---
 
-## Ключевые преимущества
+## Для чего нужен F4-Formula
 
-### 1. Чёткое разделение ядра и прикладного кода
+F4-Formula подходит для проектов, где обычного микрофреймворка уже мало, но нет желания строить приложение вокруг тяжёлой платформы с большим количеством обязательных соглашений.
 
-Фреймворк изначально делит проект на два слоя:
+Основные сценарии:
 
-- `/lib/` — ядро, общая платформа, базовые сервисы, HTTP, DI, View, Events, Utils
-- `/local/` — код конкретного проекта, его контроллеры, компоненты, маршруты, зависимости и расширения
+- корпоративные сайты и сервисы;
+- административные панели;
+- внутренние инструменты;
+- API и AJAX-приложения;
+- модульные CMS-подобные системы;
+- SaaS-приложения;
+- проекты с несколькими независимыми функциональными модулями;
+- приложения, где одно ядро используется в нескольких проектах.
 
-Такой подход даёт главное преимущество: можно развивать и обновлять ядро отдельно, не превращая проект в свалку правок по всей кодовой базе.
-
-### 2. Переопределение без хака ядра
-
-Конфиги и bootstrap-файлы подгружаются в фиксированном порядке через `lib/data` и потом `local/data`, поэтому проектный слой может расширять или переопределять поведение ядра без переписывания базовых файлов.
-
-Это очень удобно для:
-
-- маршрутов
-- middleware
-- helpers
-- DI definitions через `services.yaml` и `.definitions.php`
-- планировщика
-- констант и служебной конфигурации
-
-### 3. Современный HTTP-слой поверх классического PHP
-
-Вместо прямой завязки на `$_SERVER`, `$_POST`, `php://input` и ручную сборку ответа, во фреймворке есть отдельный HTTP-слой:
-
-- `Environment` является единым источником нормализованного HTTP-окружения
-- `Request` и `Response` работают как отдельные объекты
-- `Router` управляет request pipeline
-- `ErrorHandler` централизованно переводит ошибки в HTML/JSON `Response`
-- поддерживаются trusted proxies / trusted hosts
-- JSON body читается один раз
-- есть CLI-режим
-- поддерживается middleware pipeline
-
-### 4. Встроенная компонентная система
-
-Во фреймворке есть собственные компоненты с менеджером регистрации и запуска:
-
-- `BaseComponent`
-- `ComponentManager`
-- шаблоны компонентов
-- `blueprint.yaml` для дефолтных параметров
-- `result_modifier.php`
-- `component_epilog.php`
-- автоматическое подключение CSS/JS
-- кэширование вывода компонента
-
-
-### 5. Сервисный слой для данных вместо хаотичных SQL-хелперов
-
-`DataManager` даёт единый способ работы с таблицами:
-
-- `getList()`
-- `getById()`
-- `count()`
-- `getRaw()`
-- `add()`
-- `update()`
-- `delete()`
-- `tx()` для транзакций
-
-Плюс к этому:
-
-- карта полей через `getFieldsMap()`
-- валидация входных данных
-- авто-гидрация
-- DTO по желанию
-- защита от небезопасных SQL-конструкций
-- централизованный реестр менеджеров
-
-В итоге проект получает нормальный data layer, а не разрозненный набор запросов.
-
-### 6. Модульная архитектура для реальных фич
-
-F4-Formula поддерживает автономные модули с собственной структурой:
-
-- `setting.yaml`
-- `include.php`
-- `data/`
-- `db/migrations`
-- `db/seeds`
-- `install/index.php`
-- `install/ui`
-- `lib/Component` и другие классы модуля
-
-Модули можно подключать, отключать, устанавливать и переносить между проектами.
-
-### 7. Нормальная история с миграциями
-
-Для модулей используется связка:
-
-- `ModuleMigration`
-- `PhinxMigrator`
-- глобальный `lib/phinx.php`
-- вызов миграций по slug модуля
-- поддержка сидов
-- rollback
-- снапшоты перед откатом
-
-### 8. Гибкий кэш из коробки
-
-Во фреймворке есть:
-
-- общий кэш
-- кэш компонентов
-- кэш шаблонов
-- data-layer cache с тегами
-- защита от cache stampede через lock
-- несколько адаптеров:
-  - File
-  - APCu
-  - Memcached
-  - Redis
-
-### 9. Безопасность не в виде “когда-нибудь потом”
-
-Во фреймворк уже заложены базовые защитные механики:
-
-- CSRF middleware
-- security headers
-- cache headers middleware
-- нормализация и санитизация заголовков
-- trusted proxy / host логика
-- read-only контроль для raw SQL
-- безопасные cookie/session параметры
-- защищённая обработка JSON body
-
-### 10. Удобная инфраструктура для продакшена
-
-Из коробки есть полезные прикладные инструменты:
-
-- единый composition root через `Kernel`
-- DI через PHP-DI
-- YAML-конфиги
-- планировщик задач
-- assets manager
-- markdown renderer
-- логирование
-- ротация логов
-- модульный bootstrap
-- helper-функции для быстрого доступа к app/template/assets/components
+Главная идея F4-Formula — оставить разработчику прямой контроль над приложением, но убрать повторяющуюся инфраструктурную работу.
 
 ---
 
-## Что именно улучшено по сравнению с базовым F3-подходом
+## Ключевые принципы
 
-Если коротко, F4-Formula это практическая эволюция под крупные прикладные проекты.
+### Ядро отдельно от проекта
 
-### Было типично в классическом микрофреймворке
-
-- минимум структуры
-- много прямой работы с superglobals
-- разрозненные сервисы
-- слабая модульность
-- сложнее масштабировать проект без договорённостей
-
-### Стало в F4-Formula
-
-- разделение платформы и проекта
-- единый DI-контур
-- объектный HTTP-слой
-- предсказуемый bootstrap
-- модульная архитектура
-- компонентный UI-слой
-- сервисный слой для БД
-- встроенные миграции модулей
-- расширяемый кэш
-- безопаснее работа с запросами и raw SQL
-- удобный путь для роста от маленького проекта к большому
-
----
-
-## Архитектура
+Код платформы находится в `/lib`, а проектный код — в `/local`.
 
 ```text
 /lib
-  /app
-    /Base
-    /Http
-    /Controller
-    /Service
-    /View
-    /Utils
-    /Events
-    /Component
-    /Modules
-    /Migrations
-  /data
-    constants.php
-    services.yaml
-    .definitions.php
-    helpers.php
-    middleware.php
-    routes.php
-    schedule.php
-  phinx.php
-  prolog.php
+    общее ядро и инфраструктура
 
 /local
-  /app
-    /Controller
-    /Service
-    /Component
-  /data
-    constants.php
-    services.yaml
-    .definitions.php
-    helpers.php
-    middleware.php
-    routes.php
-    schedule.php
-  /modules
-    /Blog
-      setting.yaml
-      include.php
-      /data
-      /db
-        /migrations
-        /seeds
-      /install
-      /lib
----
-
-## Текущее ядро Stage 2
-
-Stage 2 переводит F4-Formula от исторического «центрального объекта, который умеет всё» к разделённому ядру с явными владельцами состояния и инфраструктуры.
-
-Главное правило текущей архитектуры:
-
-> `Kernel` собирает приложение, DI передаёт зависимости, `F4` остаётся удобным facade, но не является Service Locator и не должен самостоятельно реализовывать работу подсистем.
-
-### Kernel — единственная точка bootstrap
-
-`App\Base\Kernel` отвечает за composition root:
-
-1. создаёт базовые runtime-объекты ядра;
-2. инициализирует `Environment`;
-3. создаёт ранний `ErrorHandler`;
-4. загружает основной `config.yaml`;
-5. выполняет discovery модулей;
-6. собирает DI definitions;
-7. строит PHP-DI container;
-8. запускает installers/migrations после готовности DI;
-9. загружает runtime-файлы `helpers.php`, `middleware.php`, `routes.php`;
-10. отдельно загружает `schedule.php` только в cron/CLI schedule-фазе.
-
-Обычный прикладной класс не должен обращаться к `Kernel::instance()->get()` вместо constructor injection.
-
-Допустимые места прямого обращения к Kernel:
-
-- `prolog.php` и другие composition-root entry points;
-- bootstrap/data-файлы;
-- cron/schedule entry point;
-- динамическая инфраструктура, где класс определяется только во время выполнения.
-
-### F4 больше не Service Locator
-
-Устаревшие API предыдущей архитектуры удаляются:
-
-```php
-F4::instance();
-$f4->getDI(...);
-$f4->hasDI(...);
-$f4->resolveFromContainer(...);
+    код конкретного проекта
 ```
 
-В обычных классах зависимости передаются через constructor injection:
+Это позволяет:
+
+- обновлять ядро отдельно от прикладного кода;
+- переиспользовать одно ядро в нескольких проектах;
+- переносить модули между сайтами;
+- не вносить проектные изменения непосредственно в framework-код;
+- сохранять понятную границу между платформой и приложением.
+
+---
+
+### Явные зависимости
+
+F4-Formula использует PHP-DI и constructor injection.
+
+Обычный сервис получает зависимости напрямую:
 
 ```php
-final class ExampleService
+final class ArticleService
 {
     public function __construct(
-        private SomeDependency $dependency
+        private ArticleRepository $repository
     ) {}
 }
 ```
 
-Если инфраструктуре нужно создать runtime class-string, используется `ServiceLocator::make()`.
+Класс не должен самостоятельно искать свои зависимости в глобальном контейнере.
+
+Такой подход делает код:
+
+- проще для тестирования;
+- понятнее при чтении;
+- устойчивее к изменениям;
+- менее связанным с глобальным состоянием.
 
 ---
 
-## F4Store: отдельное состояние framework
+### F4 как удобный facade, а не контейнер всего приложения
 
-Исторический `$hive` больше не должен быть внутренним состоянием большого `F3Tools`.
-
-Для этого введён `App\Base\F4Store`.
-
-`F4Store` — простой объект хранения framework-state:
-
-```text
-F4Store
-├── ref()
-├── exists()
-├── get()
-├── set()
-├── clear()
-├── mset()
-├── extend()
-└── all()
-```
-
-Он не отвечает за:
-
-- HTTP;
-- DI;
-- Router;
-- Cookie;
-- Session;
-- Cache;
-- bootstrap;
-- логирование.
-
-`F4` сохраняет удобный публичный API:
-
-```php
-$f4->get('DEBUG');
-$f4->set('UI', '...');
-$f4->exists('KEY');
-```
-
-но эти операции делегируются `F4Store`.
-
-Это позволяет сохранить удобство старого API без смешивания хранения состояния с логикой ядра.
-
----
-
-## F3Tools и F3Helpers
-
-Большой исторический `F3Tools` разделяется по ответственности.
-
-### F3Tools
-
-`F3Tools` содержит обычные инструменты общего назначения:
-
-- `parse()`
-- `split()`
-- `extract()`
-- `stringify()`
-- `csv()`
-- `format()`
-- `export()`
-- `constants()`
-- `hash()`
-- `encode()` / `decode()`
-- `recursive()`
-- `scrub()`
-- `serialize()` / `unserialize()`
-- `trace()`
-- `grab()`
-- `call()`
-- `chain()`
-- `relay()`
-- `mutex()`
-- `read()` / `write()`
-- `highlight()`
-
-Эти методы рассматриваются как инструменты, а не как владельцы HTTP/DI/bootstrap.
-
-### F3Helpers
-
-`F3Helpers` содержит framework-facing convenience API и временную обвязку вокруг отдельных сервисов.
-
-Главное правило:
-
-> helper может проксировать вызов в сервис, но не должен дублировать реализацию этого сервиса.
-
-Например, HTTP-данные берутся из `Environment/Request`, cache-операции выполняет Cache service, cookie-операции выполняет CookieService.
-
-Cookie/session/cache пока сохраняют удобные facade-методы через `F4`, но конечным владельцем поведения остаётся соответствующий сервис.
-
-Bootstrap/runtime будет вынесен из helper-слоя отдельным этапом.
-
----
-
-## HTTP: Environment является источником истины
-
-`Environment` отвечает за сбор и нормализацию HTTP-окружения:
-
-- snapshot `$_SERVER`;
-- headers;
-- raw request body;
-- method override;
-- scheme;
-- host;
-- port;
-- base path;
-- trusted proxies;
-- trusted hosts;
-- client IP;
-- построение `Request`.
-
-Другие классы не должны повторно вычислять эти данные.
+Основной объект `F4` предоставляет компактный API для типовых framework-операций и общего состояния приложения.
 
 Например:
 
 ```php
-$request = $environment->getRequest();
-
-$request->clientIp();
-$request->isAjax();
-$request->getHeader('User-Agent');
+$f4->get('DEBUG');
+$f4->set('UI', 'templates/');
+$f4->route('GET /', [MainController::class, 'index']);
 ```
 
-Если `F4` предоставляет короткие convenience-методы для этих данных, они должны быть только proxy к `Environment/Request`.
+При этом реальные задачи выполняются специализированными классами:
+
+- `Environment` отвечает за окружение;
+- `Router` — за маршрутизацию;
+- `Response` — за HTTP-ответ;
+- `ErrorHandler` — за обработку ошибок;
+- `F4Store` — за framework-state;
+- Cache service — за кэш;
+- Cookie service — за cookie;
+- Scheduler — за задачи;
+- DataManager — за работу с данными.
+
+---
+
+## HTTP-слой
+
+F4-Formula не требует напрямую работать с `$_SERVER`, `php://input`, заголовками и ручной отправкой ответа.
+
+HTTP-слой разделён на несколько объектов.
+
+### Environment
+
+`Environment` собирает и нормализует окружение запроса:
+
+- HTTP method;
+- URI;
+- scheme;
+- host;
+- port;
+- headers;
+- request body;
+- client IP;
+- trusted proxies;
+- trusted hosts;
+- CLI-режим.
+
+Он является единым источником данных об окружении.
+
+---
+
+### Request
+
+`Request` предоставляет удобный объектный API для входящего запроса.
+
+Пример:
+
+```php
+$method = $req->getMethod();
+$path = $req->getPath();
+$token = $req->getHeader('Authorization');
+```
+
+---
+
+### Response
+
+`Response` отвечает за статус, headers, body и структурированные данные ответа.
+
+```php
+return $res
+    ->withStatus(200)
+    ->withBody('Hello');
+```
+
+Для JSON используются единые структуры результата:
+
+```json
+{
+  "flag": "ok",
+  "data": {},
+  "errors": []
+}
+```
+
+или:
+
+```json
+{
+  "flag": "error",
+  "data": {},
+  "errors": [
+    "Something went wrong"
+  ]
+}
+```
+
+---
+
+## Router
+
+Router поддерживает:
+
+- HTTP routes;
+- именованные маршруты;
+- параметры URL;
+- route groups;
+- middleware;
+- redirects;
+- sync/AJAX/CLI режимы;
+- controller handlers;
+- callable handlers.
+
+Пример:
+
+```php
+$f4->route(
+    'GET /articles/@id',
+    [ArticleController::class, 'detail']
+);
+```
+
+Группы маршрутов позволяют объединять общий prefix и middleware.
+
+---
+
+## Middleware
+
+Middleware pipeline разделяет обработку запроса на независимые этапы.
+
+Поддерживаются:
+
+- глобальные middleware;
+- middleware группы;
+- middleware отдельного route;
+- BEFORE;
+- MAIN;
+- AFTER.
+
+Это удобно для:
+
+- авторизации;
+- CSRF;
+- security headers;
+- cache headers;
+- rate limiting;
+- логирования;
+- проверки прав;
+- преобразования response.
 
 ---
 
 ## Централизованная обработка ошибок
 
-В Stage 2 старый `$f4->error()` удаляется.
+Все необработанные ошибки проходят через единый `ErrorHandler`.
 
-За конечную обработку ошибок отвечает один:
+Он обрабатывает:
 
-```php
-App\Http\ErrorHandler
-```
+- PHP errors;
+- `Throwable`;
+- ошибки Router;
+- middleware exceptions;
+- controller exceptions;
+- ошибки View;
+- ошибки bootstrap;
+- fatal errors.
 
-`ErrorHandler` зависит только от:
+Для HTTP-запросов обработчик автоматически формирует подходящий `Response`.
 
-```php
-App\Http\Environment
-```
+HTML-запрос получает HTML error page.
 
-### Два режима одного ErrorHandler
+JSON/AJAX-запрос получает структурированный JSON-ответ.
 
-До готовности DI обработчик доступен статически:
-
-```php
-ErrorHandler::bootstrap($environment)->register();
-```
-
-После сборки PHP-DI тот же экземпляр регистрируется в container и передаётся через constructor injection.
-
-То есть static bootstrap mode и object DI mode используют одно состояние, а не два разных обработчика.
-
-### Ошибки PHP
-
-PHP warnings/errors переводятся в `ErrorException` и далее проходят общий Throwable pipeline.
-
-Глобальный exception/shutdown handler используется как последняя аварийная сетка для ошибок, возникших вне Router pipeline:
-
-- bootstrap;
-- DI build;
-- module bootstrap;
-- cron/CLI;
-- fatal shutdown error.
-
-### Ошибки HTTP request pipeline
-
-Основная HTTP boundary находится в `Router`.
-
-```text
-Middleware
-    ↓
-Controller
-    ↓
-Template
-    ↓
-Service
-    ↓
-Throwable
-    ↓
-Router
-    ↓
-ErrorHandler
-    ↓
-Response
-```
-
-`MiddlewareDispatcher`, контроллеры и шаблоны не должны создавать собственные независимые error-handling системы.
-
-### HTML и JSON
-
-`ErrorHandler` определяет вид ответа по текущему HTTP context.
-
-Для JSON используется существующая структура `Response`:
-
-```json
-{
-  "flag": "error",
-  "data": [],
-  "errors": []
-}
-```
-
-Для аварийного HTML 500 используется минимальный renderer, который не зависит от обычного `Template`, компонентов, assets или DI. Это защищает систему от рекурсивного падения, если первичная ошибка произошла именно внутри View.
-
-HTTP-состояния вроде `404` и `405` тоже проходят через `ErrorHandler`, но являются штатным HTTP result, а не обязательно системным исключением.
+Это позволяет не размазывать `try/catch`, `echo`, `die` и ручную обработку 500 ошибок по всему проекту.
 
 ---
 
-## Runtime factories
+## Компонентная система
 
-Для объектов, которые создаются динамически по class-string, действует отдельный runtime-factory контракт.
+F4-Formula содержит собственную компонентную модель для построения повторно используемых UI-блоков.
 
-Основные семейства:
-
-- `BaseComponent`
-- `InstallerBase`
-- `DataManager`
-
-Такие классы реализуют:
-
-```php
-RuntimeFactoryInterface
-```
-
-Контракт разделяет два типа данных:
+Компонент может включать:
 
 ```text
-constructor
-    = обычные class-specific DI dependencies
-
-setFactoryContext()
-    = runtime/framework context от фабрики
+Component
+├── class
+├── template
+├── blueprint.yaml
+├── result_modifier.php
+├── component_epilog.php
+├── style.css
+└── script.js
 ```
+
+Поддерживаются:
+
+- параметры;
+- шаблоны;
+- автоматическое подключение CSS/JS;
+- модификация результата;
+- component epilog;
+- кэширование;
+- runtime context.
+
+Компоненты можно хранить как в ядре, так и в проекте или модуле.
+
+---
+
+## Работа с данными
+
+Для прикладной работы с БД используется `DataManager`.
+
+Он предоставляет единый CRUD API:
+
+```php
+getList()
+getById()
+count()
+getRaw()
+add()
+update()
+delete()
+tx()
+```
+
+DataManager поддерживает:
+
+- описание полей;
+- фильтрацию входных данных;
+- DTO;
+- joins;
+- сортировку;
+- pagination;
+- транзакции;
+- безопасную работу с raw SQL;
+- кэширование;
+- registry managers.
+
+Это позволяет строить data layer без копирования одинаковой SQL-логики по контроллерам и сервисам.
+
+---
+
+## Модули
+
+F4-Formula поддерживает автономные функциональные модули.
+
+Типичная структура:
+
+```text
+local/modules/Blog
+├── setting.yaml
+├── include.php
+├── data
+├── db
+│   ├── migrations
+│   └── seeds
+├── install
+└── lib
+```
+
+Модуль может содержать:
+
+- сервисы;
+- контроллеры;
+- компоненты;
+- routes;
+- middleware;
+- DI definitions;
+- миграции;
+- seeds;
+- install UI;
+- scheduler tasks;
+- собственные настройки.
+
+Это позволяет переносить функциональность между проектами как отдельный законченный блок.
+
+---
+
+## Миграции
+
+Для управления схемой БД используется Phinx.
+
+F4-Formula добавляет поверх него framework-интеграцию:
+
+- module migrations;
+- module seeds;
+- rollback;
+- status;
+- snapshots;
+- единый migration runner.
+
+Миграции могут принадлежать как всему приложению, так и отдельному модулю.
+
+---
+
+## Кэширование
+
+Фреймворк поддерживает несколько уровней кэша:
+
+- общий application cache;
+- component cache;
+- template cache;
+- data cache;
+- HTTP route cache.
+
+Доступные backend-адаптеры:
+
+- File;
+- APCu;
+- Memcached;
+- Redis.
+
+Также поддерживаются механизмы защиты от cache stampede.
+
+---
+
+## View и шаблоны
+
+View-слой позволяет:
+
+- использовать несколько UI paths;
+- передавать параметры в шаблоны;
+- подключать partials;
+- кэшировать шаблоны;
+- выполнять after-render callbacks;
+- изолировать область выполнения шаблона.
 
 Пример:
 
 ```php
-$component = $services->make($className, [
-    'f4'           => $f4,
-    'assets'       => $assets,
-    'cacheHelper'  => $cacheHelper,
-    'templateName' => $template,
-    'folder'       => $folder,
-    'arParams'     => $params,
-]);
+return $this->render(
+    $res,
+    'pages/article.php',
+    [
+        'article' => $article
+    ]
+);
 ```
-
-Нельзя переносить runtime context обратно в constructor только для того, чтобы упростить создание объекта.
-
-`ServiceLocator::make()`:
-
-1. создаёт новый объект;
-2. резолвит типизированные constructor dependencies из PHP-DI;
-3. после создания передаёт runtime context через `setFactoryContext()`.
-
-Обычные application services не должны использовать этот механизм вместо constructor injection.
 
 ---
 
-## DI definitions
+## Безопасность
 
-Штатные определения DI находятся в:
+В F4-Formula предусмотрены базовые механизмы защиты приложения:
 
-```text
-lib/data/services.yaml
-lib/data/.definitions.php
-
-local/data/services.yaml
-local/data/.definitions.php
-```
-
-Исторический `dependencies.php` больше не участвует в штатном bootstrap Stage 2.
-
-При включённом autowiring простые классы лучше не описывать вручную без необходимости.
-
-Например:
-
-```php
-Router::class => autowire(Router::class),
-```
-
-лучше длинной definition с перечислением каждого constructor parameter, если нет специальной причины фиксировать аргументы вручную.
-
-Это снижает риск ситуации:
-
-```text
-в constructor добавили dependency
-↓
-старую explicit definition забыли обновить
-↓
-PHP-DI InvalidDefinition
-```
-
-Singleton/runtime-объекты composition root при необходимости регистрируются явно через `DI\value()`.
+- CSRF protection;
+- security headers;
+- trusted proxy handling;
+- trusted host validation;
+- безопасные cookie/session параметры;
+- нормализация HTTP headers;
+- безопасная обработка JSON;
+- read-only режим для raw SQL;
+- middleware для security policy.
 
 ---
 
-## Router и middleware
+## Планировщик
 
-`Router` отвечает за жизненный цикл HTTP request:
+Встроенный Scheduler позволяет регистрировать фоновые и cron-задачи.
 
-```text
-match route
-   ↓
-BEFORE middleware
-   ↓
-MAIN middleware chain
-   ↓
-handler / controller
-   ↓
-AFTER middleware
-   ↓
-Response
-```
+Задачи могут принадлежать:
 
-Handler-классы создаются через DI/infrastructure, а не через F4 Service Locator API.
+- ядру;
+- проекту;
+- модулю.
 
-Middleware может быть:
+Пример сценариев:
 
-- глобальным;
-- групповым;
-- route-level;
-- BEFORE;
-- MAIN;
-- AFTER.
-
-Ошибка внутри любой части pipeline поднимается до Router boundary и передаётся `ErrorHandler`.
+- очистка временных файлов;
+- генерация sitemap;
+- синхронизация данных;
+- отправка уведомлений;
+- обработка очередей;
+- регулярный импорт.
 
 ---
 
-## Актуальный bootstrap data flow
+## Конфигурация
 
-Упрощённо текущая последовательность выглядит так:
+Основные настройки хранятся в YAML.
 
-```text
-prolog.php
-   ↓
-Kernel::instance()
-   ↓
-Environment
-   ↓
-early ErrorHandler
-   ↓
-F4 + F4Store
-   ↓
-config.yaml
-   ↓
-module discovery
-   ↓
-services.yaml / .definitions.php
-   ↓
-PHP-DI build
-   ↓
-module installers / migrations
-   ↓
-helpers.php
-middleware.php
-routes.php
-   ↓
-Router::run()
+```yaml
+DEBUG: 1
+TZ: Europe/Moscow
+UI:
+  - local/ui
 ```
 
-Schedule запускается отдельной фазой:
-
-```text
-cron / CLI
-   ↓
-Kernel::loadSchedules()
-   ↓
-lib/data/schedule.php
-local/data/schedule.php
-module schedule.php
-   ↓
-Scheduler
-```
-
-HTTP bootstrap не должен автоматически запускать schedule.
+Поддерживается разделение конфигурации ядра и конкретного проекта.
 
 ---
 
-## Практические правила архитектуры
+## Структура проекта
 
-### Обычный класс
-
-Использует constructor injection:
-
-```php
-final class Service
-{
-    public function __construct(
-        private Repository $repository
-    ) {}
-}
+```text
+/
+├── lib
+│   ├── app
+│   │   ├── Base
+│   │   ├── Component
+│   │   ├── Controller
+│   │   ├── Events
+│   │   ├── Http
+│   │   ├── Migrations
+│   │   ├── Modules
+│   │   ├── Service
+│   │   ├── Utils
+│   │   └── View
+│   │
+│   ├── data
+│   ├── phinx.php
+│   └── prolog.php
+│
+├── local
+│   ├── app
+│   │   ├── Component
+│   │   ├── Controller
+│   │   └── Service
+│   │
+│   ├── data
+│   ├── modules
+│   └── ui
+│
+├── upload
+├── cache
+└── index.php
 ```
-
-### Composition root
-
-Может обращаться к Kernel:
-
-```php
-$kernel = Kernel::instance();
-$scheduler = $kernel->get(Scheduler::class);
-```
-
-### Runtime infrastructure
-
-Может использовать `ServiceLocator::make()` для class-string объектов с runtime context.
-
-### F4
-
-Используется как удобный framework facade и доступ к framework-state, но не как универсальный DI container.
-
-### Environment
-
-Единственный источник HTTP environment/request normalization.
-
-### ErrorHandler
-
-Единственная конечная система обработки необработанных ошибок.
-
-### F4Store
-
-Единственный владелец общего key-value framework state.
 
 ---
 
-## Что ещё остаётся на следующих этапах
+## Почему F4-Formula
 
-Текущий Stage 2 ещё не считается полностью закрытым. После стабилизации текущих контрактов планируются:
+F4-Formula ориентирован не на максимальную абстракцию, а на практическую разработку.
 
-- окончательное отделение bootstrap/runtime логики от `F3Helpers`;
-- дальнейшее уменьшение ответственности `F4`;
-- последовательное превращение cookie/session/cache facade-методов в чистые provider-прокси;
-- аудит всех сайтов на старые `F4::instance()`, `getDI()`, `hasDI()`;
-- аудит ручных `new` для DI-managed классов;
-- проверка runtime factory contracts;
-- удаление оставшихся compatibility bridges;
-- полный lint/runtime smoke test всех проектов.
+Он даёт достаточно инфраструктуры, чтобы не собирать каждый проект заново, но не забирает у разработчика контроль над архитектурой.
 
-Главный принцип этого этапа: не перепроектировать всё ядро одновременно, а последовательно отделять владельцев ответственности, сохраняя рабочий публичный API там, где он ещё полезен.
+Основные преимущества:
+
+- компактное ядро;
+- прозрачный bootstrap;
+- constructor DI;
+- самостоятельный HTTP-слой;
+- Router и middleware;
+- централизованная обработка ошибок;
+- модульная архитектура;
+- компонентная UI-система;
+- встроенный data layer;
+- миграции;
+- scheduler;
+- несколько backend-ов кэша;
+- разделение ядра и project code;
+- возможность использовать одну платформу для нескольких проектов.
+
+---
+
+## Когда F4-Formula особенно удобен
+
+Фреймворк хорошо подходит, если проект:
+
+- уже перерос набор отдельных PHP-скриптов;
+- имеет много повторно используемой функциональности;
+- должен развиваться несколько лет;
+- состоит из независимых модулей;
+- использует общее ядро для нескольких сайтов;
+- требует контролируемого DI;
+- содержит много AJAX/API логики;
+- использует сложные административные интерфейсы;
+- должен обновляться без постоянных конфликтов с project code.
+
+---
+
+## Философия
+
+F4-Formula старается соблюдать простой принцип:
+
+> У каждого слоя должна быть своя ответственность, но разработчик не должен платить за это лишней сложностью.
+
+Фреймворк не пытается скрыть PHP.
+
+Он предоставляет понятные инструменты вокруг PHP, HTTP, DI, БД и модульной архитектуры, оставляя код приложения прямым и читаемым.
